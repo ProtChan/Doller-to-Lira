@@ -27,16 +27,22 @@ jobs:
         run: node --check app.js
       - name: Runtime smoke test
         run: node smoke-runtime.js
-      - name: Install Chromium test runtime
+      - name: Install browser test runtimes
         run: |
           npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
-      - name: Real browser DOM interaction test (local build)
+          npx playwright install --with-deps chromium webkit
+      - name: Real Chromium DOM interaction test (local build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
-          node scripts/e2e.mjs
+          BROWSER=chromium node scripts/e2e.mjs
+      - name: Real WebKit DOM interaction test (local build)
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http-webkit.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          BROWSER=webkit node scripts/e2e.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
@@ -48,7 +54,13 @@ jobs:
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: Real browser DOM interaction test (deployed Pages)
+      - name: Real Chromium DOM interaction test (deployed Pages)
         env:
           TEST_URL: ${{ steps.deployment.outputs.page_url }}
+          BROWSER: chromium
+        run: node scripts/e2e.mjs
+      - name: Real WebKit DOM interaction test (deployed Pages)
+        env:
+          TEST_URL: ${{ steps.deployment.outputs.page_url }}
+          BROWSER: webkit
         run: node scripts/e2e.mjs
