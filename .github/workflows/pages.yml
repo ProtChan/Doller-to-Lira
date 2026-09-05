@@ -27,6 +27,16 @@ jobs:
         run: node --check app.js
       - name: Runtime smoke test
         run: node smoke-runtime.js
+      - name: Install Chromium test runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Real browser DOM interaction test
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          node scripts/e2e.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
