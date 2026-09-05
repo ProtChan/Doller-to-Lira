@@ -3,142 +3,193 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0d12" />
-  <title>ドルとリラ | USD/TRY ポジション管理</title>
+  <meta name="theme-color" content="#090b0f" />
+  <title>ドルとリラ | USD/TRY Position Manager</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">USD/TRY POSITION MANAGER</p>
-        <h1>ドルとリラ</h1>
-        <p class="subcopy">ドルリラの保有量・スワップ・含み損益・ロスカット余力を、ローカルだけで記録。</p>
+  <div class="shell">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark">$₺</div>
+        <div><h1>ドルとリラ</h1><p>USD/TRY POSITION MANAGER</p></div>
       </div>
-      <div class="top-actions">
-        <span class="local-badge">● LOCAL ONLY</span>
-        <button class="button ghost" id="openBackupBtn">バックアップ</button>
-        <button class="button ghost" id="openSettingsBtn">設定</button>
+      <div class="header-actions">
+        <span class="local-status"><i></i>LOCAL</span>
+        <button class="text-btn" id="openBackupBtn">バックアップ</button>
+        <button class="settings-btn" id="openSettingsBtn" aria-label="設定">設定</button>
       </div>
     </header>
 
+    <nav class="tabs" aria-label="メインナビゲーション">
+      <button class="tab active" data-tab="overview">概要</button>
+      <button class="tab" data-tab="positions">ポジション</button>
+      <button class="tab" data-tab="daily">日次入力</button>
+      <button class="tab" data-tab="calendar">カレンダー</button>
+      <button class="tab" data-tab="risk">リスク</button>
+    </nav>
+
     <main>
-      <section class="kpi-grid" id="kpiGrid">
-        <article class="kpi-card featured">
-          <span>総損益</span>
-          <strong id="kpiTotalPnl">—</strong>
-          <small id="kpiTotalPnlSub">為替差損益 + 累積スワップ</small>
-        </article>
-        <article class="kpi-card"><span>保有 lot</span><strong id="kpiLots">—</strong><small id="kpiUnits">—</small></article>
-        <article class="kpi-card"><span>累積スワップ</span><strong id="kpiSwap">—</strong><small id="kpiSwapDaily">—</small></article>
-        <article class="kpi-card"><span>為替差損益</span><strong id="kpiFxPnl">—</strong><small id="kpiAvgEntry">—</small></article>
-        <article class="kpi-card"><span>証拠金維持率</span><strong id="kpiMaintenance">—</strong><small id="kpiMargin">—</small></article>
-        <article class="kpi-card danger-card"><span>推定LCライン</span><strong id="kpiLc">—</strong><small id="kpiLcDistance">—</small></article>
+      <section class="metric-strip" aria-label="主要指標">
+        <div class="metric primary"><span>総損益</span><strong id="kpiTotalPnl">—</strong><small id="kpiTotalPnlSub">FX + Swap</small></div>
+        <div class="metric"><span>保有</span><strong id="kpiLots">—</strong><small id="kpiUnits">—</small></div>
+        <div class="metric"><span>累積スワップ</span><strong id="kpiSwap">—</strong><small id="kpiSwapDaily">—</small></div>
+        <div class="metric"><span>為替差損益</span><strong id="kpiFxPnl">—</strong><small id="kpiAvgEntry">—</small></div>
+        <div class="metric"><span>維持率</span><strong id="kpiMaintenance">—</strong><small id="kpiMargin">—</small></div>
+        <div class="metric"><span>推定LC</span><strong id="kpiLc">—</strong><small id="kpiLcDistance">—</small></div>
       </section>
 
-      <section class="entry-grid">
-        <article class="panel">
-          <div class="panel-head">
-            <div><p class="eyebrow">POSITION</p><h2>ポジション追加</h2></div>
-            <span class="hint">約定ごとに追加</span>
+      <section class="view active" id="view-overview">
+        <div class="section-head">
+          <div><span class="section-kicker">PORTFOLIO</span><h2>ポートフォリオ概要</h2></div>
+          <span id="latestSnapshotLabel" class="section-meta">日次データ未入力</span>
+        </div>
+        <div class="overview-layout">
+          <div class="main-chart-zone">
+            <div class="chart-toolbar">
+              <div class="segmented" id="overviewChartMode">
+                <button class="active" data-mode="pnl">損益</button>
+                <button data-mode="exposure">Lot / Swap</button>
+              </div>
+              <span class="chart-note">日次スナップショット</span>
+            </div>
+            <div class="chart-large"><canvas id="overviewChart"></canvas></div>
           </div>
-          <form id="positionForm" class="form-grid">
+          <aside class="quick-entry">
+            <div class="quick-title"><span>QUICK INPUT</span><strong>今日の更新</strong></div>
+            <form id="quickDailyForm" class="compact-form">
+              <label>日付<input type="date" id="quickDailyDate" required /></label>
+              <label>USD/TRY<input type="number" id="quickDailyRate" step="0.0001" min="0" placeholder="48.6400" required /></label>
+              <div class="form-two">
+                <label>TRY/JPY<input type="number" id="quickDailyTryJpy" step="0.0001" min="0" placeholder="3.2500" /></label>
+                <label>Swap / lot<input type="number" id="quickDailySwap" step="1" placeholder="1399" /></label>
+              </div>
+              <button class="solid-btn" type="submit">日次データを保存</button>
+            </form>
+            <div class="quick-divider"></div>
+            <button class="outline-btn full" id="jumpAddPositionBtn">＋ ポジションを追加</button>
+          </aside>
+        </div>
+
+        <div class="section-head compact-head">
+          <div><span class="section-kicker">OPEN POSITIONS</span><h2>保有中ポジション</h2></div>
+          <button class="link-btn" data-go-tab="positions">すべて見る →</button>
+        </div>
+        <div class="open-position-list" id="overviewPositionList"></div>
+      </section>
+
+      <section class="view" id="view-positions">
+        <div class="section-head">
+          <div><span class="section-kicker">POSITIONS</span><h2>ポジション</h2></div>
+          <button class="solid-btn small" id="togglePositionFormBtn">＋ 新規ポジション</button>
+        </div>
+
+        <div class="inline-editor hidden" id="positionEditor">
+          <form id="positionForm" class="inline-form">
             <label>約定日<input type="date" id="positionDate" required /></label>
             <label>売買<select id="positionSide"><option value="short">売り</option><option value="long">買い</option></select></label>
             <label>約定レート<input type="number" id="entryRate" step="0.0001" min="0" placeholder="48.6500" required /></label>
             <label>lot<input type="number" id="entryLots" step="0.01" min="0.01" placeholder="1" required /></label>
-            <label class="wide">メモ<input type="text" id="positionMemo" placeholder="任意" /></label>
-            <button class="button primary wide" type="submit">ポジションを追加</button>
+            <label class="grow">メモ<input type="text" id="positionMemo" placeholder="任意" /></label>
+            <button class="solid-btn" type="submit">追加</button>
           </form>
-        </article>
-
-        <article class="panel">
-          <div class="panel-head">
-            <div><p class="eyebrow">DAILY SNAPSHOT</p><h2>日次データ入力</h2></div>
-            <span class="hint">同日は上書き</span>
-          </div>
-          <form id="dailyForm" class="form-grid">
-            <label>日付<input type="date" id="dailyDate" required /></label>
-            <label>USD/TRY<input type="number" id="dailyRate" step="0.0001" min="0" placeholder="48.6400" required /></label>
-            <label>TRY/JPY<input type="number" id="dailyTryJpy" step="0.0001" min="0" placeholder="3.2500" /></label>
-            <label>Swap / lot (円)<input type="number" id="dailySwap" step="1" placeholder="1399" /></label>
-            <button class="button primary wide" type="submit">日次データを保存</button>
-          </form>
-        </article>
-      </section>
-
-      <section class="chart-grid two-col">
-        <article class="panel chart-panel">
-          <div class="panel-head"><div><p class="eyebrow">PNL</p><h2>損益推移</h2></div><div class="legend-note">為替差損益 / スワップ / 合計</div></div>
-          <div class="chart-wrap"><canvas id="pnlChart"></canvas></div>
-        </article>
-        <article class="panel chart-panel">
-          <div class="panel-head"><div><p class="eyebrow">EXPOSURE</p><h2>保有lot & スワップ</h2></div><div class="legend-note">lotと日次スワップ</div></div>
-          <div class="chart-wrap"><canvas id="lotSwapChart"></canvas></div>
-        </article>
-      </section>
-
-      <section class="chart-grid two-col">
-        <article class="panel chart-panel">
-          <div class="panel-head"><div><p class="eyebrow">RISK</p><h2>ロスカットライン</h2></div><div class="legend-note">実勢レートとの距離</div></div>
-          <div class="chart-wrap"><canvas id="lcChart"></canvas></div>
-        </article>
-        <article class="panel chart-panel">
-          <div class="panel-head"><div><p class="eyebrow">MARGIN</p><h2>証拠金維持率</h2></div><div class="legend-note">LC閾値を併記</div></div>
-          <div class="chart-wrap"><canvas id="maintenanceChart"></canvas></div>
-        </article>
-      </section>
-
-      <section class="panel calendar-panel">
-        <div class="panel-head calendar-head">
-          <div><p class="eyebrow">CALENDAR</p><h2>為替差損 + スワップ込みカレンダー</h2></div>
-          <div class="calendar-controls"><button class="icon-btn" id="prevMonthBtn" aria-label="前月">‹</button><strong id="calendarTitle">—</strong><button class="icon-btn" id="nextMonthBtn" aria-label="翌月">›</button></div>
         </div>
+
+        <div class="positions-layout">
+          <div class="data-table-wrap">
+            <table class="data-table positions-table">
+              <thead><tr><th>約定日</th><th>Side</th><th>約定</th><th>lot</th><th>現在値</th><th>為替損益</th><th>Swap</th><th>Net</th><th>状態</th><th></th></tr></thead>
+              <tbody id="positionTableBody"></tbody>
+            </table>
+          </div>
+
+          <aside class="position-detail empty" id="positionDetail">
+            <div class="detail-empty"><span>POSITION DETAIL</span><strong>ポジションを選択</strong><p>行をタップすると、そのポジションだけの損益推移・スワップ・詳細を表示します。</p></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-daily">
+        <div class="section-head">
+          <div><span class="section-kicker">DAILY SNAPSHOT</span><h2>日次入力</h2></div>
+          <span class="section-meta">同日を入力すると上書き</span>
+        </div>
+        <form id="dailyForm" class="daily-entry-bar">
+          <label>日付<input type="date" id="dailyDate" required /></label>
+          <label>USD/TRY<input type="number" id="dailyRate" step="0.0001" min="0" placeholder="48.6400" required /></label>
+          <label>TRY/JPY<input type="number" id="dailyTryJpy" step="0.0001" min="0" placeholder="3.2500" /></label>
+          <label>Swap / lot (円)<input type="number" id="dailySwap" step="1" placeholder="1399" /></label>
+          <button class="solid-btn" type="submit">保存</button>
+        </form>
+        <div class="data-table-wrap daily-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>日付</th><th>USD/TRY</th><th>TRY/JPY</th><th>Swap/lot</th><th>保有lot</th><th>FX損益</th><th>累積Swap</th><th>総損益</th><th>日次損益</th><th></th></tr></thead>
+            <tbody id="dailyTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-calendar">
+        <div class="section-head calendar-header">
+          <div><span class="section-kicker">CALENDAR</span><h2>ネット損益カレンダー</h2></div>
+          <div class="month-switch"><button id="prevMonthBtn">‹</button><strong id="calendarTitle">—</strong><button id="nextMonthBtn">›</button></div>
+        </div>
+        <div class="calendar-summary" id="calendarSummary"></div>
         <div class="calendar-weekdays"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>
         <div class="calendar-grid" id="calendarGrid"></div>
       </section>
 
-      <section class="table-grid">
-        <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">POSITIONS</p><h2>建玉一覧</h2></div><span id="positionCount" class="hint">0件</span></div>
-          <div class="table-scroll"><table><thead><tr><th>約定日</th><th>売買</th><th>約定</th><th>lot</th><th>状態</th><th>メモ</th><th></th></tr></thead><tbody id="positionTableBody"></tbody></table></div>
-        </article>
-        <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">HISTORY</p><h2>日次履歴</h2></div><span id="dailyCount" class="hint">0日</span></div>
-          <div class="table-scroll"><table><thead><tr><th>日付</th><th>USD/TRY</th><th>TRY/JPY</th><th>Swap/lot</th><th>保有lot</th><th>総損益</th><th></th></tr></thead><tbody id="dailyTableBody"></tbody></table></div>
-        </article>
+      <section class="view" id="view-risk">
+        <div class="section-head">
+          <div><span class="section-kicker">RISK</span><h2>ロスカット・証拠金</h2></div>
+          <span class="section-meta" id="riskStatusLabel">—</span>
+        </div>
+        <div class="risk-grid">
+          <div class="risk-chart-block">
+            <div class="chart-title"><strong>USD/TRY と推定ロスカットライン</strong><span>現在レートとの距離</span></div>
+            <div class="chart-medium"><canvas id="lcChart"></canvas></div>
+          </div>
+          <div class="risk-chart-block">
+            <div class="chart-title"><strong>証拠金維持率</strong><span>LC閾値を併記</span></div>
+            <div class="chart-medium"><canvas id="maintenanceChart"></canvas></div>
+          </div>
+        </div>
+        <div class="risk-table" id="riskFacts"></div>
       </section>
 
       <p class="disclaimer">本サービスは記録・可視化を目的とする管理ツールです。証拠金・ロスカット計算は設定値に基づく概算で、実際の判定は利用中のFX業者の取引ルールが優先されます。投資助言ではありません。</p>
     </main>
   </div>
 
-  <dialog id="settingsDialog" class="modal">
-    <form method="dialog" class="modal-card" id="settingsForm">
-      <div class="modal-head"><div><p class="eyebrow">SETTINGS</p><h2>計算設定</h2></div><button class="icon-btn" value="cancel" aria-label="閉じる">×</button></div>
-      <div class="form-grid">
-        <label>口座元本 (円)<input type="number" id="settingCapital" step="1" min="0" /></label>
-        <label>1 lot の通貨数<input type="number" id="settingUnits" step="1" min="1" /></label>
-        <label>最大レバレッジ<input type="number" id="settingLeverage" step="0.1" min="1" /></label>
-        <label>LC閾値 (%)<input type="number" id="settingLcThreshold" step="1" min="1" /></label>
-        <label>既定 TRY/JPY<input type="number" id="settingTryJpy" step="0.0001" min="0" /></label>
-        <label>既定 Swap / lot (円)<input type="number" id="settingSwap" step="1" /></label>
-      </div>
-      <div class="modal-actions"><button class="button ghost" type="button" id="resetAllBtn">全データ初期化</button><button class="button primary" type="submit" value="default">設定を保存</button></div>
-    </form>
-  </dialog>
+  <div class="drawer-backdrop" id="settingsBackdrop"></div>
+  <aside class="settings-drawer" id="settingsDrawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div><span>SETTINGS</span><h2>計算設定</h2><p>変更は入力と同時に自動保存されます。</p></div>
+      <button class="drawer-close" id="closeSettingsBtn" aria-label="閉じる">×</button>
+    </div>
+    <div class="settings-list">
+      <label><span>口座元本 <em>円</em></span><input type="number" id="settingCapital" step="1" min="0" /></label>
+      <label><span>1 lot の通貨数 <em>通貨</em></span><input type="number" id="settingUnits" step="1" min="1" /></label>
+      <label><span>最大レバレッジ <em>倍</em></span><input type="number" id="settingLeverage" step="0.1" min="1" /></label>
+      <label><span>ロスカット閾値 <em>%</em></span><input type="number" id="settingLcThreshold" step="1" min="1" /></label>
+      <label><span>既定 TRY/JPY</span><input type="number" id="settingTryJpy" step="0.0001" min="0" /></label>
+      <label><span>既定 Swap / lot <em>円</em></span><input type="number" id="settingSwap" step="1" /></label>
+    </div>
+    <div class="autosave-status" id="settingsSaveStatus"><i></i> 自動保存</div>
+    <button class="danger-link" id="resetAllBtn">全データを初期化</button>
+  </aside>
 
   <dialog id="backupDialog" class="modal">
     <div class="modal-card">
-      <div class="modal-head"><div><p class="eyebrow">BACKUP</p><h2>手動バックアップ</h2></div><button class="icon-btn" id="closeBackupBtn" aria-label="閉じる">×</button></div>
-      <p class="modal-copy">データはこのブラウザだけに保存されています。JSONを定期的にダウンロードしてください。</p>
-      <div class="backup-grid">
-        <button class="button primary" id="exportJsonBtn">JSONを保存</button>
-        <button class="button ghost" id="exportCsvBtn">日次CSVを保存</button>
-        <label class="button ghost file-button">JSONから復元<input type="file" id="importJsonInput" accept="application/json,.json" /></label>
+      <div class="modal-head"><div><span>BACKUP</span><h2>手動バックアップ</h2></div><button id="closeBackupBtn">×</button></div>
+      <p>データはこのブラウザのlocalStorageだけに保存されています。定期的にJSONを書き出してください。</p>
+      <div class="backup-actions">
+        <button class="solid-btn" id="exportJsonBtn">JSONを保存</button>
+        <button class="outline-btn" id="exportCsvBtn">日次CSV</button>
+        <label class="outline-btn file-btn">JSONから復元<input type="file" id="importJsonInput" accept="application/json,.json" /></label>
       </div>
       <div class="backup-meta" id="backupMeta">—</div>
     </div>
@@ -146,13 +197,13 @@
 
   <dialog id="closePositionDialog" class="modal">
     <form method="dialog" class="modal-card" id="closePositionForm">
-      <div class="modal-head"><div><p class="eyebrow">CLOSE POSITION</p><h2>ポジション決済</h2></div><button class="icon-btn" value="cancel" aria-label="閉じる">×</button></div>
+      <div class="modal-head"><div><span>CLOSE POSITION</span><h2>ポジション決済</h2></div><button value="cancel">×</button></div>
       <input type="hidden" id="closePositionId" />
-      <div class="form-grid">
+      <div class="modal-form">
         <label>決済日<input type="date" id="closeDate" required /></label>
         <label>決済レート<input type="number" id="closeRate" step="0.0001" min="0" required /></label>
       </div>
-      <div class="modal-actions"><button class="button ghost" value="cancel">キャンセル</button><button class="button primary" type="submit" value="default">決済を保存</button></div>
+      <div class="modal-footer"><button class="outline-btn" value="cancel">キャンセル</button><button class="solid-btn" type="submit" value="default">決済を保存</button></div>
     </form>
   </dialog>
 
