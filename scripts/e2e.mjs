@@ -1,8 +1,10 @@
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 
 const targetUrl = process.env.TEST_URL || 'http://127.0.0.1:4173/';
-const browser = await chromium.launch({ headless: true });
+const browserName = (process.env.BROWSER || 'chromium').toLowerCase();
+const browserType = browserName === 'webkit' ? webkit : chromium;
+const browser = await browserType.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
 const pageErrors = [];
 page.on('pageerror', (err) => pageErrors.push(err.message));
@@ -11,6 +13,7 @@ page.on('console', (msg) => {
 });
 
 try {
+  console.log('BROWSER=', browserName);
   console.log('TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
@@ -41,7 +44,7 @@ try {
   console.log('daily/risk tabs: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log('REAL DOM E2E: PASS');
+  console.log(`REAL DOM E2E (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
