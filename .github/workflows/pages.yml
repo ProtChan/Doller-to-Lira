@@ -31,7 +31,7 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Real browser DOM interaction test
+      - name: Real browser DOM interaction test (local build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http.log 2>&1 &
           SERVER_PID=$!
@@ -48,3 +48,7 @@ jobs:
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Real browser DOM interaction test (deployed Pages)
+        env:
+          TEST_URL: ${{ steps.deployment.outputs.page_url }}
+        run: node scripts/e2e.mjs
