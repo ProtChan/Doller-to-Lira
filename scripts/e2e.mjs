@@ -26,6 +26,25 @@ try {
   console.log('swapDecimals=', await page.locator('html').getAttribute('data-swap-decimals'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
 
+  const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
+  assert.match(manifestHref || '', /manifest\.webmanifest/, 'PWA manifest link is missing');
+  const manifestUrl = new URL('manifest.webmanifest', targetUrl).href;
+  const manifestResponse = await page.request.get(manifestUrl);
+  assert.equal(manifestResponse.ok(), true, `manifest request failed: ${manifestResponse.status()}`);
+  const manifest = await manifestResponse.json();
+  assert.equal(manifest.display, 'standalone', 'manifest display is not standalone');
+  assert.equal(manifest.short_name, 'ドルとリラ', 'manifest short name is wrong');
+  assert.ok(Array.isArray(manifest.icons) && manifest.icons.some((icon) => /icon-dollar-lira\.svg/.test(icon.src)), 'Dollar-Lira PWA icon is missing from manifest');
+  const iconResponse = await page.request.get(new URL('icon-dollar-lira.svg', targetUrl).href);
+  assert.equal(iconResponse.ok(), true, `PWA icon request failed: ${iconResponse.status()}`);
+  assert.match(await iconResponse.text(), /\$₺/, 'PWA icon does not contain the Dollar-Lira mark');
+  console.log('PWA manifest/icon: PASS');
+
+  if (targetUrl.startsWith('https://')) {
+    await page.waitForFunction(() => document.documentElement.dataset.pwaReady === '1', { timeout: 15000 });
+    console.log('service worker registration: PASS');
+  }
+
   await page.locator('[data-tab="positions"]').click();
   assert.equal(await page.locator('[data-tab="positions"]').evaluate((el) => el.classList.contains('active')), true, 'positions tab did not become active');
   assert.equal(await page.locator('#view-positions').evaluate((el) => el.classList.contains('active')), true, 'positions view did not become active');
@@ -47,10 +66,16 @@ try {
   assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), true, 'settings drawer did not open');
   assert.equal(await page.locator('#settingsBackdrop').evaluate((el) => el.classList.contains('show')), true, 'settings backdrop did not open');
   assert.equal(await page.locator('#settingSwap').getAttribute('step'), 'any', 'default swap input is not arbitrary-decimal');
-  console.log('settings open: PASS');
-  await page.locator('#closeSettingsBtn').click();
-  assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), false, 'settings drawer did not close');
-  console.log('settings close: PASS');
+  assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true, 'mobile backup button is not visible at phone viewport');
+  await page.locator('#openBackupFromSettingsBtn').click();
+  assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), false, 'settings drawer did not close when opening mobile backup');
+  assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), true, 'backup dialog did not open from mobile settings');
+  assert.equal(await page.locator('#exportJsonBtn').isVisible(), true, 'JSON backup action is not visible on mobile');
+  assert.equal(await page.locator('#exportCsvBtn').isVisible(), true, 'CSV backup action is not visible on mobile');
+  assert.equal(await page.locator('#importJsonInput').count(), 1, 'JSON restore input is missing on mobile');
+  console.log('mobile backup access: PASS');
+  await page.locator('#closeBackupBtn').click();
+  assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), false, 'backup dialog did not close');
 
   await page.locator('[data-tab="daily"]').click();
   assert.equal(await page.locator('#view-daily').evaluate((el) => el.classList.contains('active')), true, 'daily view did not become active');
