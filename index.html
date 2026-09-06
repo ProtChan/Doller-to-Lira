@@ -4,14 +4,23 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#090b0f" />
+  <meta name="application-name" content="ドルとリラ" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ドルとリラ" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>ドルとリラ | USD/TRY Position Manager</title>
+  <link rel="manifest" href="./manifest.webmanifest?v=20260906-1130" />
+  <link rel="icon" type="image/svg+xml" href="./icon-dollar-lira.svg?v=20260906-1130" />
+  <link rel="apple-touch-icon" href="./icon-dollar-lira.svg?v=20260906-1130" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260906-1120" />
+  <link rel="stylesheet" href="./styles.css?v=20260906-1130" />
+  <link rel="stylesheet" href="./pwa-mobile-20260906.css?v=20260906-1130" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
-  <script src="./runtime-20260906-1120.js" defer></script>
+  <script src="./runtime-20260906-1130.js" defer></script>
 </head>
 <body>
   <div class="shell">
@@ -21,7 +30,7 @@
         <div><h1>ドルとリラ</h1><p>USD/TRY POSITION MANAGER</p></div>
       </div>
       <div class="header-actions">
-        <span class="local-status"><i></i>LOCAL · 1120</span>
+        <span class="local-status"><i></i>LOCAL · 1130</span>
         <button class="text-btn" id="openBackupBtn" type="button">バックアップ</button>
         <button class="settings-btn" id="openSettingsBtn" type="button">設定</button>
       </div>
@@ -173,6 +182,12 @@
       <label><span>既定 Swap / 1 lot <em>円</em></span><input type="number" id="settingSwap" step="any" inputmode="decimal" /></label>
     </div>
     <div class="autosave-status" id="settingsSaveStatus"><i></i> 自動保存</div>
+    <div class="mobile-backup-section">
+      <span>DATA</span>
+      <strong>バックアップ</strong>
+      <p>JSON保存・日次CSV・JSON復元をスマホから利用できます。</p>
+      <button class="outline-btn" id="openBackupFromSettingsBtn" type="button">バックアップを開く</button>
+    </div>
     <button class="danger-link" id="resetAllBtn" type="button">全データを初期化</button>
   </aside>
 
