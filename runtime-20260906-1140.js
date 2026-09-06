@@ -33,10 +33,21 @@
     fetch(`./patch-access-layout-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error(`access/layout patch HTTP ${r.status}`);
       return r.text();
+    }),
+    fetch(`./patch-swap-precision-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(`swap precision patch HTTP ${r.status}`);
+      return r.text();
     })
   ])
-    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource]) => {
-      (0, eval)(`${appSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource]) => {
+      // JPY values retain their fractional precision internally. The common display
+      // formatter truncates toward zero only at render time instead of rounding.
+      const oldMoneyBody = "${Number(v) < 0 ? '-' : ''}¥${Math.abs(Number(v)).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}";
+      const newMoneyBody = "${Math.trunc(Number(v)) < 0 ? '-' : ''}¥${Math.abs(Math.trunc(Number(v))).toLocaleString('ja-JP')}";
+      const displayNormalizedAppSource = appSource.replace(oldMoneyBody, newMoneyBody);
+      if (displayNormalizedAppSource === appSource) throw new Error('JPY display formatter patch target missing');
+
+      (0, eval)(`${displayNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
     })
     .catch((error) => showError(error?.message || String(error)));
