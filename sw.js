@@ -1,11 +1,12 @@
-const CACHE_NAME = 'dollar-to-lira-pwa-1130';
+const CACHE_NAME = 'dollar-to-lira-pwa-1140';
 const APP_SHELL = [
   './',
   './index.html',
-  './styles.css?v=20260906-1130',
-  './manifest.webmanifest',
-  './icon-dollar-lira.svg',
-  './runtime-20260906-1130.js'
+  './styles.css?v=20260906-1140',
+  './pwa-mobile-20260906.css?v=20260906-1140',
+  './manifest.webmanifest?v=20260906-1140',
+  './icon-dollar-lira.svg?v=20260906-1140',
+  './runtime-20260906-1140.js'
 ];
 
 self.addEventListener('install', (event) => {
