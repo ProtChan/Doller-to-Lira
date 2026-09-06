@@ -1,6 +1,10 @@
 name: Update Hirose USDTRY swap
 
 on:
+  push:
+    paths:
+      - 'scripts/update-hirose-swap.py'
+      - '.github/workflows/update-hirose-swap.yml'
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
