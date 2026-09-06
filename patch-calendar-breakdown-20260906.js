@@ -23,7 +23,7 @@
       const abs = Math.abs(n);
       if (abs >= 100000000) return `${sign}${(abs / 100000000).toFixed(1)}億`;
       if (abs >= 10000) return `${sign}${(abs / 10000).toFixed(1)}万`;
-      return `${sign}¥${Math.round(abs).toLocaleString('ja-JP')}`;
+      return `${sign}¥${Math.trunc(abs).toLocaleString('ja-JP')}`;
     };
 
     const calendarMoneyMarkup = (value) => `
