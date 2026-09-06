@@ -115,6 +115,7 @@
       }
       historyByDate = new Map(history.map((row) => [row.date, row]));
       window.__DTL_HIROSE_HISTORY__ = () => history.map((row) => ({ ...row }));
+      window.__DTL_HIROSE_POSITION_SWAP__ = (position, date) => positionSwapFromHistory(position, date);
       root.dataset.hiroseHistoryReady = '1';
       root.dataset.hiroseHistoryStart = history[0].date;
       root.dataset.hiroseHistoryRecords = String(history.length);
