@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ドルとリラ">
+  <rect width="512" height="512" rx="112" fill="#0f1319"/>
+  <rect x="28" y="28" width="456" height="456" rx="92" fill="none" stroke="#2a3340" stroke-width="16"/>
+  <text x="256" y="316" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="214" font-weight="900" letter-spacing="-18" fill="#f2f5f8">$₺</text>
+</svg>
