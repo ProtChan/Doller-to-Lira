@@ -1,4 +1,5 @@
-// Calendar V2: Sunday-first layout with daily Net / FX / Swap breakdown.
+// Calendar V3: Sunday-first layout with daily Net / FX / Swap breakdown.
+// Mobile only: compact large JPY values (e.g. 101,234 -> 10.1万) and shorter labels.
 (() => {
   const baseDerivedDailyForCalendar = derivedDaily;
 
@@ -12,27 +13,53 @@
     });
   };
 
+  const compactCalendarMoney = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    const sign = n < 0 ? '-' : '';
+    const abs = Math.abs(n);
+    if (abs >= 100000000) return `${sign}${(abs / 100000000).toFixed(1)}億`;
+    if (abs >= 10000) return `${sign}${(abs / 10000).toFixed(1)}万`;
+    return `${sign}¥${Math.round(abs).toLocaleString('ja-JP')}`;
+  };
+
+  const calendarMoneyMarkup = (value) => `
+    <span class="calendar-value-desktop">${money(value)}</span>
+    <span class="calendar-value-mobile">${compactCalendarMoney(value)}</span>`;
+
+  const calendarLabelMarkup = (desktop, mobile) => `
+    <span class="calendar-label-desktop">${desktop}</span>
+    <span class="calendar-label-mobile" aria-label="${desktop}" title="${desktop}">${mobile}</span>`;
+
   const calendarStyle = document.createElement('style');
   calendarStyle.textContent = `
     .calendar-weekdays span:first-child{color:#ff8994}
     .calendar-weekdays span:last-child{color:#7fbfff}
     .calendar-day.is-sunday .calendar-date{color:#ff8994}
     .calendar-day.is-saturday .calendar-date{color:#7fbfff}
-    .calendar-metrics{margin-top:auto;display:grid;gap:5px}
-    .calendar-net{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-    .calendar-net span{font-size:7px;letter-spacing:.08em;color:#5d6775;font-weight:800}
-    .calendar-net strong{font-size:14px;font-weight:850;letter-spacing:-.025em}
+    .calendar-metrics{margin-top:auto;display:grid;gap:5px;min-width:0}
+    .calendar-net{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+    .calendar-net>span{font-size:7px;letter-spacing:.08em;color:#5d6775;font-weight:800}
+    .calendar-net strong{font-size:14px;font-weight:850;letter-spacing:-.025em;min-width:0}
     .calendar-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:5px;border-top:1px solid rgba(127,138,153,.14);padding-top:5px}
     .calendar-breakdown div{min-width:0}
-    .calendar-breakdown span{display:block;font-size:6.5px;letter-spacing:.07em;color:#596373;font-weight:800}
+    .calendar-breakdown .calendar-label-desktop{display:block;font-size:6.5px;letter-spacing:.07em;color:#596373;font-weight:800}
     .calendar-breakdown strong{display:block;font-size:8px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .calendar-value-mobile,.calendar-label-mobile{display:none}
+
     @media(max-width:700px){
-      .calendar-day{min-height:100px;padding:7px 5px}
+      .calendar-day{min-height:94px;padding:6px 4px;overflow:hidden}
+      .calendar-date{font-size:8px}
+      .calendar-metrics{gap:3px}
       .calendar-net{display:block}
-      .calendar-net strong{font-size:11px;display:block;margin-top:2px}
-      .calendar-breakdown{grid-template-columns:1fr;gap:3px}
-      .calendar-breakdown div{display:flex;justify-content:space-between;gap:3px}
-      .calendar-breakdown span,.calendar-breakdown strong{font-size:6.5px;margin:0}
+      .calendar-net>span{display:none}
+      .calendar-net strong{font-size:11px;display:block;margin-top:1px;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:-.04em}
+      .calendar-breakdown{grid-template-columns:1fr;gap:2px;padding-top:4px}
+      .calendar-breakdown div{display:grid;grid-template-columns:10px minmax(0,1fr);align-items:center;gap:1px}
+      .calendar-breakdown strong{font-size:7px;margin:0;overflow:visible;text-overflow:clip;letter-spacing:-.035em;text-align:right}
+      .calendar-value-desktop,.calendar-label-desktop{display:none!important}
+      .calendar-value-mobile,.calendar-label-mobile{display:inline!important}
+      .calendar-label-mobile{font-size:6px;line-height:1;color:#596373;font-weight:850;text-align:left}
     }
   `;
   document.head.appendChild(calendarStyle);
@@ -79,10 +106,10 @@
       html += `<div class="calendar-day ${cls} ${weekendClass} ${date === isoToday() ? 'today' : ''}" data-date="${date}" style="--heat:${heat}">
         <span class="calendar-date">${day}</span>
         ${r ? `<div class="calendar-metrics">
-          <div class="calendar-net"><span>NET</span><strong class="${r.dailyPnl >= 0 ? 'positive-text' : 'negative-text'}">${money(r.dailyPnl)}</strong></div>
+          <div class="calendar-net"><span>NET</span><strong class="${r.dailyPnl >= 0 ? 'positive-text' : 'negative-text'}">${calendarMoneyMarkup(r.dailyPnl)}</strong></div>
           <div class="calendar-breakdown">
-            <div><span>FX</span><strong class="${r.dailyFxPnl >= 0 ? 'positive-text' : 'negative-text'}">${money(r.dailyFxPnl)}</strong></div>
-            <div><span>SWAP</span><strong class="${r.dailySwap >= 0 ? 'positive-text' : 'negative-text'}">${money(r.dailySwap)}</strong></div>
+            <div>${calendarLabelMarkup('FX', 'F')}<strong class="${r.dailyFxPnl >= 0 ? 'positive-text' : 'negative-text'}">${calendarMoneyMarkup(r.dailyFxPnl)}</strong></div>
+            <div>${calendarLabelMarkup('SWAP', 'S')}<strong class="${r.dailySwap >= 0 ? 'positive-text' : 'negative-text'}">${calendarMoneyMarkup(r.dailySwap)}</strong></div>
           </div>
         </div>` : ''}
       </div>`;
@@ -92,4 +119,5 @@
 
   renderCalendar();
   document.documentElement.dataset.calendarBreakdown = '1';
+  document.documentElement.dataset.calendarMobileCompact = '1';
 })();
