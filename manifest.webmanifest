@@ -11,7 +11,7 @@
   "lang": "ja",
   "icons": [
     {
-      "src": "./icon-dollar-lira.svg",
+      "src": "./icon-dollar-lira.svg?v=20260906-1141",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
