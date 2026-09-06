@@ -19,14 +19,28 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.accountingV2 === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapDecimals === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseMargin === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseFeedReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
 
   console.log('appReady=', await page.locator('html').getAttribute('data-app-ready'));
   console.log('accountingV2=', await page.locator('html').getAttribute('data-accounting-v2'));
   console.log('swapDecimals=', await page.locator('html').getAttribute('data-swap-decimals'));
+  console.log('hiroseMargin=', await page.locator('html').getAttribute('data-hirose-margin'));
+  console.log('hiroseFeedReady=', await page.locator('html').getAttribute('data-hirose-feed-ready'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
   console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
+
+  const marginBands = await page.evaluate(() => ({
+    at155: window.__DTL_MARGIN_PER_1000__(155),
+    below1575: window.__DTL_MARGIN_PER_1000__(157.4999),
+    at1575: window.__DTL_MARGIN_PER_1000__(157.5),
+    below160: window.__DTL_MARGIN_PER_1000__(159.9999),
+    at160: window.__DTL_MARGIN_PER_1000__(160)
+  }));
+  assert.deepEqual(marginBands, { at155: 6300, below1575: 6300, at1575: 6400, below160: 6400, at160: 6500 }, `Hirose margin bands are wrong: ${JSON.stringify(marginBands)}`);
+  console.log('Hirose USDJPY margin bands: PASS');
 
   const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
   assert.match(manifestHref || '', /manifest\.webmanifest/, 'PWA manifest link is missing');
@@ -68,6 +82,10 @@ try {
   assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), true, 'settings drawer did not open');
   assert.equal(await page.locator('#settingsBackdrop').evaluate((el) => el.classList.contains('show')), true, 'settings backdrop did not open');
   assert.equal(await page.locator('#settingSwap').getAttribute('step'), 'any', 'default swap input is not arbitrary-decimal');
+  assert.equal(await page.locator('#settingSwapMode').count(), 1, 'Hirose swap mode setting is missing');
+  await page.locator('#settingSwapMode').selectOption('hirose');
+  assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'hirose', 'Hirose swap mode was not activated');
+  assert.match(await page.locator('#hiroseFeedStatus').innerText(), /USD\/TRY公式データ/, 'Hirose feed status is missing');
   assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true, 'mobile backup button is not visible at phone viewport');
   await page.locator('#openBackupFromSettingsBtn').click();
   assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), false, 'settings drawer did not close when opening mobile backup');
@@ -85,6 +103,21 @@ try {
   assert.equal(await page.locator('#dailyTryJpy').count(), 0, 'legacy TRY/JPY input is still visible in daily form');
   assert.equal(await page.locator('#dailySwap').getAttribute('step'), 'any', 'daily swap input is not arbitrary-decimal');
 
+  // Hirose auto mode: 2026-09-03 official sell swap is 473.94 JPY per 1,000 USD,
+  // so this site's 10,000-unit lot must auto-fill 4,739.4 JPY.
+  await page.locator('#dailyDate').fill('2026-09-03');
+  await page.locator('#dailyDate').dispatchEvent('change');
+  assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 4739.4, 'Hirose auto swap was not scaled to site lot size');
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/, 'Hirose rollover day count is not shown');
+  console.log('Hirose USDTRY auto swap 473.94 x 10 -> 4739.4: PASS');
+
+  // Return to manual mode for the existing decimal/truncation test.
+  await page.locator('#openSettingsBtn').click();
+  await page.locator('#settingSwapMode').selectOption('manual');
+  await page.locator('#closeSettingsBtn').click();
+  assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'manual', 'manual swap mode was not restored');
+
   await page.locator('#dailyDate').fill('2026-09-06');
   await page.locator('#dailyRate').fill('48.0000');
   await page.locator('#dailyUsdJpy').fill('158.400');
@@ -94,18 +127,20 @@ try {
   const stored = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
     const row = state.daily.find((d) => d.date === '2026-09-06');
-    return { row, swapText: document.getElementById('kpiSwap')?.textContent || '', dailySwapText: document.getElementById('kpiSwapDaily')?.textContent || '', tableText: document.getElementById('dailyTableBody')?.innerText || '' };
+    return { row, swapText: document.getElementById('kpiSwap')?.textContent || '', dailySwapText: document.getElementById('kpiSwapDaily')?.textContent || '', marginText: document.getElementById('kpiMargin')?.textContent || '', tableText: document.getElementById('dailyTableBody')?.innerText || '' };
   });
   assert.equal(stored.row.usdJpy, 158.4, 'USD/JPY was not saved');
   assert.ok(Math.abs(stored.row.tryJpy - 3.3) < 1e-10, `TRY/JPY was not derived correctly: ${stored.row.tryJpy}`);
   assert.equal(stored.row.swapPerLot, 100.78901, 'swap-per-lot decimal value was not preserved');
   assert.match(stored.swapText, /¥123/, `cumulative swap should be truncated to ¥123: ${stored.swapText}`);
   assert.match(stored.dailySwapText, /¥123\/日/, `daily swap should be truncated to ¥123/day: ${stored.dailySwapText}`);
+  assert.match(stored.marginText, /¥78,720/, `1.23 lot at USDJPY 158.4 should require ¥78,720: ${stored.marginText}`);
   assert.match(stored.tableText, /100\.78901/, 'swap-per-lot decimals are not displayed in daily table');
   assert.match(stored.tableText, /158\.4/, 'USD/JPY is not displayed in daily table');
   assert.match(stored.tableText, /3\.3000/, 'calculated TRY/JPY is not displayed in daily table');
   console.log('USDJPY -> TRYJPY derivation: PASS');
   console.log('swap 100.78901 x 1.23 -> 123 yen truncation: PASS');
+  console.log('margin 6400/1000 x 12300 units -> 78720 yen: PASS');
 
   // Add a second day with a large FX move so the phone calendar must compact the value.
   await page.locator('#dailyDate').fill('2026-09-07');
@@ -155,6 +190,8 @@ try {
 
   await page.locator('[data-tab="risk"]').click();
   assert.equal(await page.locator('#view-risk').evaluate((el) => el.classList.contains('active')), true, 'risk view did not become active');
+  assert.match(await page.locator('#riskFacts').innerText(), /¥6,400\/千通貨/, 'risk view does not show Hirose per-1000 margin band');
+  console.log('risk margin band display: PASS');
   console.log('daily/calendar/risk tabs: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
