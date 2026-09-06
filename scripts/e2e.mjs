@@ -22,6 +22,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.hiroseMargin === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseFeedReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryAccounting === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapAccounting === 'fractional-internal-truncated-display', { timeout: 15000 });
@@ -32,6 +33,7 @@ try {
   console.log('hiroseMargin=', await page.locator('html').getAttribute('data-hirose-margin'));
   console.log('hiroseFeedReady=', await page.locator('html').getAttribute('data-hirose-feed-ready'));
   console.log('hiroseHistoryReady=', await page.locator('html').getAttribute('data-hirose-history-ready'));
+  console.log('hiroseHistoryAccounting=', await page.locator('html').getAttribute('data-hirose-history-accounting'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
   console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
   console.log('swapAccounting=', await page.locator('html').getAttribute('data-swap-accounting'));
@@ -89,12 +91,6 @@ try {
   assert.equal(Number(await page.locator('#settingUnits').inputValue()), 1000, 'new-install default must be 1 lot = 1,000 units');
   console.log('default 1 lot = 1,000 units: PASS');
 
-  // Keep the remaining historical regression checks on the prior 10,000-unit scale.
-  await page.locator('#settingUnits').fill('10000');
-  await page.locator('#settingUnits').dispatchEvent('input');
-  await page.locator('#settingUnits').dispatchEvent('change');
-  assert.equal(Number(await page.locator('#settingUnits').inputValue()), 10000, 'test unit size was not updated');
-
   assert.equal(await page.locator('#settingSwapMode').count(), 1, 'Hirose swap mode setting is missing');
   await page.locator('#settingSwapMode').selectOption('hirose');
   assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'hirose', 'Hirose swap mode was not activated');
@@ -113,7 +109,7 @@ try {
   assert.ok(historyCheck.records >= 47, `Hirose history is unexpectedly short: ${historyCheck.records}`);
   assert.equal(historyCheck.first?.date, '2026-07-01', 'first Hirose historical row is missing');
   assert.equal(historyCheck.first?.sellJpy, 116.3, '2026-07-01 Hirose sell swap is wrong');
-  assert.ok(Math.abs(historyCheck.july1to3Short - 5800) < 1e-9, `Hirose auto history did not accrue all July 1-3 rows: ${historyCheck.july1to3Short}`);
+  assert.ok(Math.abs(historyCheck.july1to3Short - 580) < 1e-9, `Hirose auto history did not accrue all July 1-3 rows at 1,000 units: ${historyCheck.july1to3Short}`);
   console.log('Hirose history 2026-07-01 onward + multi-day accrual: PASS');
 
   assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true, 'mobile backup button is not visible at phone viewport');
@@ -133,21 +129,20 @@ try {
   assert.equal(await page.locator('#dailyTryJpy').count(), 0, 'legacy TRY/JPY input is still visible in daily form');
   assert.equal(await page.locator('#dailySwap').getAttribute('step'), 'any', 'daily swap input is not arbitrary-decimal');
 
-  // Past official rows are available immediately in Hirose auto mode.
+  // Past official rows are available immediately in Hirose auto mode at the 1,000-unit default.
   await page.locator('#dailyDate').fill('2026-07-01');
   await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 1163, '2026-07-01 Hirose history was not scaled to the current 10,000-unit test lot');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 116.3, '2026-07-01 Hirose history was not applied at the 1,000-unit default');
   console.log('Hirose historical auto-fill 2026-07-01: PASS');
 
-  // 2026-09-03 official sell swap is 473.94 JPY per 1,000 USD,
-  // so this 10,000-unit regression scale must auto-fill 4,739.4 JPY.
+  // 2026-09-03 official sell swap is 473.94 JPY per 1,000 USD.
   await page.locator('#dailyDate').fill('2026-09-03');
   await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 4739.4, 'Hirose auto swap was not scaled to site lot size');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 473.94, 'Hirose auto swap was not kept on the 1,000-unit lot scale');
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/, 'Hirose rollover day count is not shown');
-  console.log('Hirose USDTRY auto swap 473.94 x 10 -> 4739.4: PASS');
+  console.log('Hirose USDTRY auto swap 473.94 / 1,000 units: PASS');
 
   // Return to manual mode for fractional accounting / display truncation test.
   await page.locator('#openSettingsBtn').click();
@@ -181,15 +176,16 @@ try {
   assert.ok(Math.abs(stored.swapSnapshot.cumulativeSwap - 123.9704823) < 1e-9, `cumulative swap lost fractional precision: ${stored.swapSnapshot.cumulativeSwap}`);
   assert.match(stored.swapText, /¥123/, `cumulative swap display should truncate to ¥123: ${stored.swapText}`);
   assert.match(stored.dailySwapText, /¥123\/日/, `daily swap display should truncate to ¥123/day: ${stored.dailySwapText}`);
-  assert.match(stored.marginText, /¥78,720/, `1.23 lot at USDJPY 158.4 should require ¥78,720: ${stored.marginText}`);
+  assert.match(stored.marginText, /¥7,872/, `1.23 lot at 1,000 units/lot and USDJPY 158.4 should require ¥7,872: ${stored.marginText}`);
   assert.match(stored.tableText, /100\.78901/, 'swap-per-lot decimals are not displayed in daily table');
   assert.match(stored.tableText, /158\.4/, 'USD/JPY is not displayed in daily table');
   assert.match(stored.tableText, /3\.3000/, 'calculated TRY/JPY is not displayed in daily table');
   console.log('USDJPY -> TRYJPY derivation: PASS');
   console.log('swap 100.78901 x 1.23 -> internal 123.9704823 / display ¥123: PASS');
-  console.log('margin 6400/1000 x 12300 units -> 78720 yen: PASS');
+  console.log('margin 6400/1000 x 1230 units -> 7872 yen: PASS');
 
-  // Add a second day with a large FX move so the phone calendar must compact the value.
+  // Add a second day with an FX move; at the 1,000-unit default the phone calendar
+  // remains in full-yen display because these values stay below 10,000 yen.
   await page.locator('#dailyDate').fill('2026-09-07');
   await page.locator('#dailyRate').fill('47.0000');
   await page.locator('#dailyUsdJpy').fill('158.400');
@@ -219,20 +215,20 @@ try {
   const sep7 = page.locator('.calendar-day[data-date="2026-09-07"]');
   assert.equal(await sep7.count(), 1, 'September 7 calendar cell is missing');
   const mobileValues = await sep7.locator('.calendar-value-mobile').allTextContents();
-  assert.ok(mobileValues.some((v) => /4\.2万/.test(v)), `mobile NET was not compacted to 万: ${mobileValues.join(' | ')}`);
-  assert.ok(mobileValues.some((v) => /4\.1万/.test(v)), `mobile FX was not compacted to 万: ${mobileValues.join(' | ')}`);
+  assert.ok(mobileValues.some((v) => /¥4,269/.test(v)), `mobile NET should remain full yen below 10,000: ${mobileValues.join(' | ')}`);
+  assert.ok(mobileValues.some((v) => /¥4,145/.test(v)), `mobile FX should remain full yen below 10,000: ${mobileValues.join(' | ')}`);
   assert.ok(mobileValues.some((v) => /¥123/.test(v)), `mobile swap under 10,000 should truncate to full yen: ${mobileValues.join(' | ')}`);
   assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), true, 'mobile compact calendar value is not visible on phone');
   assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), false, 'desktop full calendar value is visible on phone');
-  console.log('mobile calendar compact values: PASS');
+  console.log('mobile calendar 1,000-unit values: PASS');
 
-  // Desktop must keep the existing full-value calendar representation while truncating sub-yen fractions.
+  // Desktop keeps full-yen calendar representation while truncating sub-yen fractions.
   await page.setViewportSize({ width: 1200, height: 900 });
   assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), true, 'desktop full calendar value is not visible at desktop width');
   assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), false, 'mobile compact calendar value is visible at desktop width');
   const desktopValues = await sep7.locator('.calendar-value-desktop').allTextContents();
-  assert.ok(desktopValues.some((v) => /¥41,577/.test(v)), `desktop NET should remain full yen: ${desktopValues.join(' | ')}`);
-  assert.ok(desktopValues.some((v) => /¥41,453/.test(v)), `desktop FX should truncate sub-yen fraction: ${desktopValues.join(' | ')}`);
+  assert.ok(desktopValues.some((v) => /¥4,269/.test(v)), `desktop NET should remain full yen: ${desktopValues.join(' | ')}`);
+  assert.ok(desktopValues.some((v) => /¥4,145/.test(v)), `desktop FX should truncate sub-yen fraction: ${desktopValues.join(' | ')}`);
   console.log('desktop calendar full values preserved: PASS');
 
   await page.locator('[data-tab="risk"]').click();
