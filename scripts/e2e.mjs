@@ -23,6 +23,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.hiroseFeedReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.swapAccounting === 'fractional-internal-truncated-display', { timeout: 15000 });
 
   console.log('appReady=', await page.locator('html').getAttribute('data-app-ready'));
   console.log('accountingV2=', await page.locator('html').getAttribute('data-accounting-v2'));
@@ -31,6 +32,7 @@ try {
   console.log('hiroseFeedReady=', await page.locator('html').getAttribute('data-hirose-feed-ready'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
   console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
+  console.log('swapAccounting=', await page.locator('html').getAttribute('data-swap-accounting'));
 
   const marginBands = await page.evaluate(() => ({
     at155: window.__DTL_MARGIN_PER_1000__(155),
@@ -112,7 +114,7 @@ try {
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/, 'Hirose rollover day count is not shown');
   console.log('Hirose USDTRY auto swap 473.94 x 10 -> 4739.4: PASS');
 
-  // Return to manual mode for the existing decimal/truncation test.
+  // Return to manual mode for fractional accounting / display truncation test.
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('manual');
   await page.locator('#closeSettingsBtn').click();
@@ -127,19 +129,29 @@ try {
   const stored = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
     const row = state.daily.find((d) => d.date === '2026-09-06');
-    return { row, swapText: document.getElementById('kpiSwap')?.textContent || '', dailySwapText: document.getElementById('kpiSwapDaily')?.textContent || '', marginText: document.getElementById('kpiMargin')?.textContent || '', tableText: document.getElementById('dailyTableBody')?.innerText || '' };
+    return {
+      row,
+      swapSnapshot: window.__DTL_SWAP_SNAPSHOT__?.() || null,
+      swapText: document.getElementById('kpiSwap')?.textContent || '',
+      dailySwapText: document.getElementById('kpiSwapDaily')?.textContent || '',
+      marginText: document.getElementById('kpiMargin')?.textContent || '',
+      tableText: document.getElementById('dailyTableBody')?.innerText || ''
+    };
   });
   assert.equal(stored.row.usdJpy, 158.4, 'USD/JPY was not saved');
   assert.ok(Math.abs(stored.row.tryJpy - 3.3) < 1e-10, `TRY/JPY was not derived correctly: ${stored.row.tryJpy}`);
   assert.equal(stored.row.swapPerLot, 100.78901, 'swap-per-lot decimal value was not preserved');
-  assert.match(stored.swapText, /¥123/, `cumulative swap should be truncated to ¥123: ${stored.swapText}`);
-  assert.match(stored.dailySwapText, /¥123\/日/, `daily swap should be truncated to ¥123/day: ${stored.dailySwapText}`);
+  assert.ok(stored.swapSnapshot, 'precise swap snapshot helper is missing');
+  assert.ok(Math.abs(stored.swapSnapshot.dailySwap - 123.9704823) < 1e-9, `daily swap lost fractional precision: ${stored.swapSnapshot.dailySwap}`);
+  assert.ok(Math.abs(stored.swapSnapshot.cumulativeSwap - 123.9704823) < 1e-9, `cumulative swap lost fractional precision: ${stored.swapSnapshot.cumulativeSwap}`);
+  assert.match(stored.swapText, /¥123/, `cumulative swap display should truncate to ¥123: ${stored.swapText}`);
+  assert.match(stored.dailySwapText, /¥123\/日/, `daily swap display should truncate to ¥123/day: ${stored.dailySwapText}`);
   assert.match(stored.marginText, /¥78,720/, `1.23 lot at USDJPY 158.4 should require ¥78,720: ${stored.marginText}`);
   assert.match(stored.tableText, /100\.78901/, 'swap-per-lot decimals are not displayed in daily table');
   assert.match(stored.tableText, /158\.4/, 'USD/JPY is not displayed in daily table');
   assert.match(stored.tableText, /3\.3000/, 'calculated TRY/JPY is not displayed in daily table');
   console.log('USDJPY -> TRYJPY derivation: PASS');
-  console.log('swap 100.78901 x 1.23 -> 123 yen truncation: PASS');
+  console.log('swap 100.78901 x 1.23 -> internal 123.9704823 / display ¥123: PASS');
   console.log('margin 6400/1000 x 12300 units -> 78720 yen: PASS');
 
   // Add a second day with a large FX move so the phone calendar must compact the value.
@@ -167,25 +179,25 @@ try {
   assert.equal(await sep6.count(), 1, 'September 6 calendar cell is missing');
   assert.equal(await sep6.locator('.calendar-label-mobile').nth(0).innerText(), 'F', 'mobile FX label is not compact');
   assert.equal(await sep6.locator('.calendar-label-mobile').nth(1).innerText(), 'S', 'mobile SWAP label is not compact');
-  assert.match(await sep6.innerText(), /¥123/, 'small mobile calendar values should remain full yen values');
+  assert.match(await sep6.innerText(), /¥123/, 'small mobile calendar values should truncate sub-yen fractions');
 
   const sep7 = page.locator('.calendar-day[data-date="2026-09-07"]');
   assert.equal(await sep7.count(), 1, 'September 7 calendar cell is missing');
   const mobileValues = await sep7.locator('.calendar-value-mobile').allTextContents();
   assert.ok(mobileValues.some((v) => /4\.2万/.test(v)), `mobile NET was not compacted to 万: ${mobileValues.join(' | ')}`);
   assert.ok(mobileValues.some((v) => /4\.1万/.test(v)), `mobile FX was not compacted to 万: ${mobileValues.join(' | ')}`);
-  assert.ok(mobileValues.some((v) => /¥123/.test(v)), `mobile swap under 10,000 should remain full yen: ${mobileValues.join(' | ')}`);
+  assert.ok(mobileValues.some((v) => /¥123/.test(v)), `mobile swap under 10,000 should truncate to full yen: ${mobileValues.join(' | ')}`);
   assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), true, 'mobile compact calendar value is not visible on phone');
   assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), false, 'desktop full calendar value is visible on phone');
   console.log('mobile calendar compact values: PASS');
 
-  // Desktop must keep the existing full-value calendar representation.
+  // Desktop must keep the existing full-value calendar representation while truncating sub-yen fractions.
   await page.setViewportSize({ width: 1200, height: 900 });
   assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), true, 'desktop full calendar value is not visible at desktop width');
   assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), false, 'mobile compact calendar value is visible at desktop width');
   const desktopValues = await sep7.locator('.calendar-value-desktop').allTextContents();
   assert.ok(desktopValues.some((v) => /¥41,577/.test(v)), `desktop NET should remain full yen: ${desktopValues.join(' | ')}`);
-  assert.ok(desktopValues.some((v) => /¥41,454/.test(v)), `desktop FX should remain full yen: ${desktopValues.join(' | ')}`);
+  assert.ok(desktopValues.some((v) => /¥41,453/.test(v)), `desktop FX should truncate sub-yen fraction: ${desktopValues.join(' | ')}`);
   console.log('desktop calendar full values preserved: PASS');
 
   await page.locator('[data-tab="risk"]').click();
