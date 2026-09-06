@@ -8,6 +8,8 @@ from html import unescape
 from pathlib import Path
 
 SOURCE = 'https://hirose-fx.co.jp/contents/news/Swap'
+SEED_SOURCE = 'https://raw.githubusercontent.com/ProtChan/USDTRY/main/data/usdtry.json'
+SEED_START = '2026-07-01'
 OUT = Path('data/hirose-usdtry-swap.json')
 # Keep the same lightweight request style that is already working in ProtChan/USDTRY.
 UA = {'User-Agent': 'Mozilla/5.0 USDTRY-swap-watch/1.3'}
@@ -31,7 +33,7 @@ def fetch_bytes(url: str, attempts: int = 3) -> bytes:
             if attempt + 1 < attempts:
                 time.sleep(2.0 + attempt * 2.0)
     if last_error is None:
-        raise RuntimeError('Hirose fetch failed without an exception')
+        raise RuntimeError(f'Fetch failed without an exception: {url}')
     raise last_error
 
 
@@ -93,6 +95,33 @@ def parse_latest(html: str) -> dict:
     }
 
 
+def load_seed_history() -> list[dict]:
+    raw = fetch_bytes(SEED_SOURCE)
+    payload = json.loads(raw.decode('utf-8'))
+    rows = []
+    for source_row in payload.get('data', []):
+        date = str(source_row.get('date') or '')
+        if not date or date < SEED_START:
+            continue
+        unit = int(source_row.get('lot_size') or 0)
+        sell = source_row.get('sell_yen')
+        buy = source_row.get('buy_yen')
+        days = int(source_row.get('days') or 0)
+        if unit <= 0 or sell is None or buy is None:
+            continue
+        rows.append({
+            'date': date,
+            'days': days,
+            'unit': unit,
+            'sellJpy': float(sell),
+            'buyJpy': float(buy),
+        })
+    if not rows or rows[0]['date'] != SEED_START:
+        raise RuntimeError(f'Historical Hirose seed did not start at {SEED_START}: first={rows[0]["date"] if rows else None}')
+    print(f'seed_history={rows[0]["date"]}..{rows[-1]["date"]} records={len(rows)}')
+    return rows
+
+
 def main():
     latest = parse_latest(fetch_html())
     if latest['unit'] <= 0:
@@ -100,6 +129,8 @@ def main():
 
     data = {
         'source': SOURCE,
+        'seedSource': SEED_SOURCE,
+        'historyStart': SEED_START,
         'pair': 'USD/TRY',
         'updatedAt': None,
         'history': [],
@@ -115,17 +146,27 @@ def main():
         for row in data.get('history', [])
         if isinstance(row, dict) and row.get('date')
     }
+
+    # One-time/backstop historical seed. Once July history is present, hourly runs only
+    # need Hirose's current table, but this also repairs a feed that lost its old rows.
+    if not history or min(history) > SEED_START:
+        for row in load_seed_history():
+            history[row['date']] = row
+
     changed = history.get(latest['date']) != latest
     history[latest['date']] = latest
     data['source'] = SOURCE
+    data['seedSource'] = SEED_SOURCE
+    data['historyStart'] = SEED_START
     data['pair'] = 'USD/TRY'
-    if changed or not data.get('updatedAt'):
+    if changed or not data.get('updatedAt') or not data.get('history') or min(history) == SEED_START:
         data['updatedAt'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     data['history'] = [history[key] for key in sorted(history)]
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(latest, ensure_ascii=False))
+    print(f'history_start={data["history"][0]["date"]} history_records={len(data["history"])}')
 
 
 if __name__ == '__main__':
