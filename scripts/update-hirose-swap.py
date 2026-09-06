@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import json
 import re
-import shutil
-import subprocess
 import time
 import urllib.request
 from datetime import datetime, timezone
@@ -11,77 +9,47 @@ from pathlib import Path
 
 SOURCE = 'https://hirose-fx.co.jp/contents/news/Swap'
 OUT = Path('data/hirose-usdtry-swap.json')
-UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+# Keep the same lightweight request style that is already working in ProtChan/USDTRY.
+UA = {'User-Agent': 'Mozilla/5.0 USDTRY-swap-watch/1.3'}
 
 
 def clean_html(fragment: str) -> str:
     text = re.sub(r'<br\s*/?>', ' ', fragment, flags=re.I)
     text = re.sub(r'<[^>]+>', '', text)
-    return re.sub(r'\s+', ' ', unescape(text)).strip()
+    return re.sub(r'\s+', ' ', unescape(text).replace('\xa0', ' ')).strip()
 
 
-def fetch_with_http() -> str:
-    req = urllib.request.Request(SOURCE, headers={
-        'User-Agent': UA,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.7',
-        'Referer': 'https://hirose-fx.co.jp/',
-        'Cache-Control': 'no-cache',
-    })
-    with urllib.request.urlopen(req, timeout=30) as r:
-        raw = r.read()
-        charset = r.headers.get_content_charset() or 'utf-8'
-    try:
-        return raw.decode(charset)
-    except UnicodeDecodeError:
-        return raw.decode('utf-8', errors='replace')
+def fetch_bytes(url: str, attempts: int = 3) -> bytes:
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return response.read()
+        except Exception as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(2.0 + attempt * 2.0)
+    if last_error is None:
+        raise RuntimeError('Hirose fetch failed without an exception')
+    raise last_error
 
 
-def fetch_with_chrome() -> str:
-    chrome = next((p for name in ('google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser') if (p := shutil.which(name))), None)
-    if not chrome:
-        raise RuntimeError('Chrome/Chromium executable not found')
-    url = f'{SOURCE}?dtl={int(time.time())}'
-    proc = subprocess.run([
-        chrome,
-        '--headless=new',
-        '--no-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-background-networking',
-        '--no-first-run',
-        '--no-default-browser-check',
-        f'--user-agent={UA}',
-        '--dump-dom',
-        url,
-    ], capture_output=True, text=True, timeout=45, check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(f'Chrome exited {proc.returncode}: {proc.stderr[-500:]}')
-    html = proc.stdout
+def fetch_html(url: str = SOURCE) -> str:
+    raw = fetch_bytes(url)
+    for encoding in ('utf-8', 'cp932', 'shift_jis'):
+        try:
+            html = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        html = raw.decode('utf-8', errors='replace')
+
     if 'USD/TRY' not in html:
-        raise RuntimeError(f'Chrome page did not contain USD/TRY; body head={clean_html(html)[:200]!r}')
+        raise RuntimeError(f'Hirose response did not contain USD/TRY: {clean_html(html)[:200]!r}')
+    print('fetch_method=urllib-usdtry-proven')
     return html
-
-
-def fetch_html() -> str:
-    errors = []
-    try:
-        html = fetch_with_http()
-        if 'USD/TRY' in html:
-            print('fetch_method=http')
-            return html
-        errors.append('HTTP response missing USD/TRY')
-    except Exception as exc:
-        errors.append(f'http={exc}')
-
-    try:
-        html = fetch_with_chrome()
-        print('fetch_method=chrome')
-        return html
-    except Exception as exc:
-        errors.append(f'chrome={exc}')
-
-    raise RuntimeError('Hirose fetch failed: ' + ' | '.join(errors))
 
 
 def parse_latest(html: str) -> dict:
@@ -101,20 +69,20 @@ def parse_latest(html: str) -> dict:
     if not target or len(target) < 7:
         raise RuntimeError(f'USD/TRY row not found or malformed: {target!r}; rows={len(rows)}')
 
-    # The current table date is the non-linked date immediately before the USD/TRY table.
+    # Current table date: ignore dates inside navigation links before the USD/TRY row.
     prefix = html[:target_pos]
     prefix_without_links = re.sub(r'<a\b[^>]*>.*?</a>', ' ', prefix, flags=re.I | re.S)
-    date_matches = list(re.finditer(r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', clean_html(prefix_without_links)))
+    date_pattern = r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日'
+    date_matches = list(re.finditer(date_pattern, clean_html(prefix_without_links)))
     if not date_matches:
-        # Some rendered DOMs flatten navigation; fall back to the last Japanese date before the row.
-        date_matches = list(re.finditer(r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', clean_html(prefix)))
+        date_matches = list(re.finditer(date_pattern, clean_html(prefix)))
     if not date_matches:
         raise RuntimeError('Current swap table date not found')
     m = date_matches[-1]
     date = f'{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}'
 
-    def n(s: str):
-        return float(s.replace(',', ''))
+    def n(value: str) -> float:
+        return float(value.replace(',', ''))
 
     return {
         'date': date,
@@ -142,14 +110,19 @@ def main():
         except Exception:
             pass
 
-    history = {row['date']: row for row in data.get('history', []) if isinstance(row, dict) and row.get('date')}
+    history = {
+        row['date']: row
+        for row in data.get('history', [])
+        if isinstance(row, dict) and row.get('date')
+    }
     changed = history.get(latest['date']) != latest
     history[latest['date']] = latest
     data['source'] = SOURCE
     data['pair'] = 'USD/TRY'
     if changed or not data.get('updatedAt'):
         data['updatedAt'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-    data['history'] = [history[k] for k in sorted(history)]
+    data['history'] = [history[key] for key in sorted(history)]
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(latest, ensure_ascii=False))
