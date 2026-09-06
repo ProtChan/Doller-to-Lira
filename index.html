@@ -9,9 +9,9 @@
   <meta http-equiv="Expires" content="0" />
   <title>ドルとリラ | USD/TRY Position Manager</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260906-1100" />
+  <link rel="stylesheet" href="./styles.css?v=20260906-1120" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
-  <script src="./runtime-20260906-1100.js" defer></script>
+  <script src="./runtime-20260906-1120.js" defer></script>
 </head>
 <body>
   <div class="shell">
@@ -21,7 +21,7 @@
         <div><h1>ドルとリラ</h1><p>USD/TRY POSITION MANAGER</p></div>
       </div>
       <div class="header-actions">
-        <span class="local-status"><i></i>LOCAL · 1100</span>
+        <span class="local-status"><i></i>LOCAL · 1120</span>
         <button class="text-btn" id="openBackupBtn" type="button">バックアップ</button>
         <button class="settings-btn" id="openSettingsBtn" type="button">設定</button>
       </div>
@@ -68,7 +68,7 @@
               <label>USD/TRY<input type="number" id="quickDailyRate" step="0.0001" min="0" required /></label>
               <div class="form-two">
                 <label>USD/JPY<input type="number" id="quickDailyUsdJpy" step="0.001" min="0" required /></label>
-                <label>Swap / 1 lot<input type="number" id="quickDailySwap" step="0.01" /></label>
+                <label>Swap / 1 lot<input type="number" id="quickDailySwap" step="any" inputmode="decimal" /></label>
               </div>
               <small>TRY/JPY は USD/JPY ÷ USD/TRY で内部計算。Swap は × lot 後、1円未満を切り捨て。</small>
               <button class="solid-btn" type="submit">日次データを保存</button>
@@ -121,7 +121,7 @@
           <label>日付<input type="date" id="dailyDate" required /></label>
           <label>USD/TRY<input type="number" id="dailyRate" step="0.0001" min="0" required /></label>
           <label>USD/JPY<input type="number" id="dailyUsdJpy" step="0.001" min="0" required /></label>
-          <label>Swap / 1 lot (円)<input type="number" id="dailySwap" step="0.01" /></label>
+          <label>Swap / 1 lot (円)<input type="number" id="dailySwap" step="any" inputmode="decimal" /></label>
           <button class="solid-btn" type="submit">保存</button>
         </form>
         <div class="data-table-wrap daily-table-wrap">
@@ -138,7 +138,7 @@
           <div class="month-switch"><button id="prevMonthBtn" type="button">‹</button><strong id="calendarTitle">—</strong><button id="nextMonthBtn" type="button">›</button></div>
         </div>
         <div class="calendar-summary" id="calendarSummary"></div>
-        <div class="calendar-weekdays"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>
+        <div class="calendar-weekdays"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
         <div class="calendar-grid" id="calendarGrid"></div>
       </section>
 
@@ -170,7 +170,7 @@
       <label><span>最大レバレッジ <em>倍</em></span><input type="number" id="settingLeverage" step="0.1" min="1" /></label>
       <label><span>ロスカット閾値 <em>%</em></span><input type="number" id="settingLcThreshold" step="1" min="1" /></label>
       <label style="display:none"><span>既定 TRY/JPY</span><input type="number" id="settingTryJpy" step="0.0001" min="0" /></label>
-      <label><span>既定 Swap / 1 lot <em>円</em></span><input type="number" id="settingSwap" step="0.01" /></label>
+      <label><span>既定 Swap / 1 lot <em>円</em></span><input type="number" id="settingSwap" step="any" inputmode="decimal" /></label>
     </div>
     <div class="autosave-status" id="settingsSaveStatus"><i></i> 自動保存</div>
     <button class="danger-link" id="resetAllBtn" type="button">全データを初期化</button>
