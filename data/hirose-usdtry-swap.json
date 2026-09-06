@@ -14,8 +14,8 @@
       "date": "2026-09-04",
       "days": 0,
       "unit": 1000,
-      "sellJpy": 0,
-      "buyJpy": 0
+      "sellJpy": 0.0,
+      "buyJpy": 0.0
     }
   ]
 }
