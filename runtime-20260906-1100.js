@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = '20260906-1100';
+  const BUILD = '20260906-1110';
   const showError = (message) => {
     document.documentElement.dataset.appLoadError = message;
     const bar = document.createElement('div');
@@ -15,12 +15,16 @@
       return r.text();
     }),
     fetch(`./patch-20260906-1100.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`patch HTTP ${r.status}`);
+      if (!r.ok) throw new Error(`accounting patch HTTP ${r.status}`);
+      return r.text();
+    }),
+    fetch(`./patch-swap-decimals-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(`swap decimal patch HTTP ${r.status}`);
       return r.text();
     })
   ])
-    .then(([appSource, patchSource]) => {
-      (0, eval)(`${appSource}\n${patchSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+    .then(([appSource, accountingSource, swapDecimalSource]) => {
+      (0, eval)(`${appSource}\n${accountingSource}\n${swapDecimalSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
     })
     .catch((error) => showError(error?.message || String(error)));
