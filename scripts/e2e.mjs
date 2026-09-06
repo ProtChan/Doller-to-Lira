@@ -19,10 +19,12 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.accountingV2 === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapDecimals === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
 
   console.log('appReady=', await page.locator('html').getAttribute('data-app-ready'));
   console.log('accountingV2=', await page.locator('html').getAttribute('data-accounting-v2'));
   console.log('swapDecimals=', await page.locator('html').getAttribute('data-swap-decimals'));
+  console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
 
   await page.locator('[data-tab="positions"]').click();
   assert.equal(await page.locator('[data-tab="positions"]').evaluate((el) => el.classList.contains('active')), true, 'positions tab did not become active');
@@ -78,9 +80,33 @@ try {
   console.log('USDJPY -> TRYJPY derivation: PASS');
   console.log('swap 100.78901 x 1.23 -> 123 yen truncation: PASS');
 
+  await page.locator('[data-tab="calendar"]').click();
+  assert.equal(await page.locator('#view-calendar').evaluate((el) => el.classList.contains('active')), true, 'calendar view did not become active');
+  const weekdayTexts = await page.locator('.calendar-weekdays span').allTextContents();
+  assert.deepEqual(weekdayTexts, ['日','月','火','水','木','金','土'], `calendar weekdays are not Sunday-first: ${weekdayTexts.join(',')}`);
+  const leadingEmpty = await page.locator('#calendarGrid > .calendar-day.empty').evaluateAll((els) => {
+    let count = 0;
+    for (const el of els) {
+      if (el.previousElementSibling && !el.previousElementSibling.classList.contains('empty')) break;
+      count++;
+    }
+    return count;
+  });
+  assert.equal(leadingEmpty, 2, `September 2026 should have 2 leading cells in Sunday-first calendar, got ${leadingEmpty}`);
+  const sep6 = page.locator('.calendar-day[data-date="2026-09-06"]');
+  assert.equal(await sep6.count(), 1, 'September 6 calendar cell is missing');
+  const sep6Text = await sep6.innerText();
+  assert.match(sep6Text, /NET/i, 'calendar cell does not show NET');
+  assert.match(sep6Text, /FX/i, 'calendar cell does not show FX');
+  assert.match(sep6Text, /SWAP/i, 'calendar cell does not show SWAP');
+  assert.match(sep6Text, /¥123/, `calendar cell does not show daily swap/net ¥123: ${sep6Text}`);
+  assert.match(sep6Text, /¥0/, `calendar cell does not show daily FX ¥0: ${sep6Text}`);
+  console.log('Sunday-first calendar: PASS');
+  console.log('calendar Net / FX / Swap breakdown: PASS');
+
   await page.locator('[data-tab="risk"]').click();
   assert.equal(await page.locator('#view-risk').evaluate((el) => el.classList.contains('active')), true, 'risk view did not become active');
-  console.log('daily/risk tabs: PASS');
+  console.log('daily/calendar/risk tabs: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`REAL DOM E2E (${browserName}): PASS`);
