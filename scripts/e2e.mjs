@@ -21,6 +21,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.swapDecimals === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseMargin === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseFeedReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapAccounting === 'fractional-internal-truncated-display', { timeout: 15000 });
@@ -30,6 +31,7 @@ try {
   console.log('swapDecimals=', await page.locator('html').getAttribute('data-swap-decimals'));
   console.log('hiroseMargin=', await page.locator('html').getAttribute('data-hirose-margin'));
   console.log('hiroseFeedReady=', await page.locator('html').getAttribute('data-hirose-feed-ready'));
+  console.log('hiroseHistoryReady=', await page.locator('html').getAttribute('data-hirose-history-ready'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
   console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
   console.log('swapAccounting=', await page.locator('html').getAttribute('data-swap-accounting'));
@@ -84,10 +86,36 @@ try {
   assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), true, 'settings drawer did not open');
   assert.equal(await page.locator('#settingsBackdrop').evaluate((el) => el.classList.contains('show')), true, 'settings backdrop did not open');
   assert.equal(await page.locator('#settingSwap').getAttribute('step'), 'any', 'default swap input is not arbitrary-decimal');
+  assert.equal(Number(await page.locator('#settingUnits').inputValue()), 1000, 'new-install default must be 1 lot = 1,000 units');
+  console.log('default 1 lot = 1,000 units: PASS');
+
+  // Keep the remaining historical regression checks on the prior 10,000-unit scale.
+  await page.locator('#settingUnits').fill('10000');
+  await page.locator('#settingUnits').dispatchEvent('input');
+  await page.locator('#settingUnits').dispatchEvent('change');
+  assert.equal(Number(await page.locator('#settingUnits').inputValue()), 10000, 'test unit size was not updated');
+
   assert.equal(await page.locator('#settingSwapMode').count(), 1, 'Hirose swap mode setting is missing');
   await page.locator('#settingSwapMode').selectOption('hirose');
   assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'hirose', 'Hirose swap mode was not activated');
   assert.match(await page.locator('#hiroseFeedStatus').innerText(), /USD\/TRY公式データ/, 'Hirose feed status is missing');
+
+  const historyCheck = await page.evaluate(() => {
+    const rows = window.__DTL_HIROSE_HISTORY__?.() || [];
+    return {
+      start: document.documentElement.dataset.hiroseHistoryStart,
+      records: Number(document.documentElement.dataset.hiroseHistoryRecords || 0),
+      first: rows[0] || null,
+      july1to3Short: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-01', side: 'short', lots: 1 }, '2026-07-03')
+    };
+  });
+  assert.equal(historyCheck.start, '2026-07-01', `Hirose history did not start on 2026-07-01: ${historyCheck.start}`);
+  assert.ok(historyCheck.records >= 47, `Hirose history is unexpectedly short: ${historyCheck.records}`);
+  assert.equal(historyCheck.first?.date, '2026-07-01', 'first Hirose historical row is missing');
+  assert.equal(historyCheck.first?.sellJpy, 116.3, '2026-07-01 Hirose sell swap is wrong');
+  assert.ok(Math.abs(historyCheck.july1to3Short - 5800) < 1e-9, `Hirose auto history did not accrue all July 1-3 rows: ${historyCheck.july1to3Short}`);
+  console.log('Hirose history 2026-07-01 onward + multi-day accrual: PASS');
+
   assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true, 'mobile backup button is not visible at phone viewport');
   await page.locator('#openBackupFromSettingsBtn').click();
   assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), false, 'settings drawer did not close when opening mobile backup');
@@ -105,8 +133,15 @@ try {
   assert.equal(await page.locator('#dailyTryJpy').count(), 0, 'legacy TRY/JPY input is still visible in daily form');
   assert.equal(await page.locator('#dailySwap').getAttribute('step'), 'any', 'daily swap input is not arbitrary-decimal');
 
-  // Hirose auto mode: 2026-09-03 official sell swap is 473.94 JPY per 1,000 USD,
-  // so this site's 10,000-unit lot must auto-fill 4,739.4 JPY.
+  // Past official rows are available immediately in Hirose auto mode.
+  await page.locator('#dailyDate').fill('2026-07-01');
+  await page.locator('#dailyDate').dispatchEvent('change');
+  assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 1163, '2026-07-01 Hirose history was not scaled to the current 10,000-unit test lot');
+  console.log('Hirose historical auto-fill 2026-07-01: PASS');
+
+  // 2026-09-03 official sell swap is 473.94 JPY per 1,000 USD,
+  // so this 10,000-unit regression scale must auto-fill 4,739.4 JPY.
   await page.locator('#dailyDate').fill('2026-09-03');
   await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
