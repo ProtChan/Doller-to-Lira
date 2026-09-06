@@ -1,0 +1,21 @@
+{
+  "source": "https://hirose-fx.co.jp/contents/news/Swap",
+  "pair": "USD/TRY",
+  "updatedAt": "2026-09-06T03:15:00Z",
+  "history": [
+    {
+      "date": "2026-09-03",
+      "days": 4,
+      "unit": 1000,
+      "sellJpy": 473.94,
+      "buyJpy": -551.01
+    },
+    {
+      "date": "2026-09-04",
+      "days": 0,
+      "unit": 1000,
+      "sellJpy": 0,
+      "buyJpy": 0
+    }
+  ]
+}
