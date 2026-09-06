@@ -1,11 +1,11 @@
-const CACHE_NAME = 'dollar-to-lira-pwa-1140';
+const CACHE_NAME = 'dollar-to-lira-pwa-1141';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css?v=20260906-1140',
   './pwa-mobile-20260906.css?v=20260906-1140',
-  './manifest.webmanifest?v=20260906-1140',
-  './icon-dollar-lira.svg?v=20260906-1140',
+  './manifest.webmanifest?v=20260906-1141',
+  './icon-dollar-lira.svg?v=20260906-1141',
   './runtime-20260906-1140.js'
 ];
 
