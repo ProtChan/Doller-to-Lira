@@ -29,10 +29,14 @@
     fetch(`./patch-mobile-pwa-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error(`mobile/PWA patch HTTP ${r.status}`);
       return r.text();
+    }),
+    fetch(`./patch-access-layout-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(`access/layout patch HTTP ${r.status}`);
+      return r.text();
     })
   ])
-    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource]) => {
-      (0, eval)(`${appSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource]) => {
+      (0, eval)(`${appSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
     })
     .catch((error) => showError(error?.message || String(error)));
