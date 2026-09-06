@@ -42,19 +42,22 @@
     }, 0);
   };
 
+  // Captured after the precision patch has installed fractional accounting.
+  // Hirose itself loads asynchronously and may overwrite these symbols later, so
+  // installHistoryAccounting() is intentionally idempotent and re-applied on readiness changes.
   const basePositionSwapAsOf = positionSwapAsOf;
   const baseDerivedDaily = derivedDaily;
 
-  positionSwapAsOf = function(p, date) {
+  const historyPositionSwapAsOf = function(p, date) {
     if (!isAuto() || !history.length) return basePositionSwapAsOf(p, date);
     return positionSwapFromHistory(p, date);
   };
 
-  portfolioSwap = function(date) {
-    return state.positions.reduce((sum, p) => sum + positionSwapAsOf(p, date), 0);
+  const historyPortfolioSwap = function(date) {
+    return state.positions.reduce((sum, p) => sum + historyPositionSwapAsOf(p, date), 0);
   };
 
-  derivedDaily = function() {
+  const historyDerivedDaily = function() {
     const rows = baseDerivedDaily();
     if (!isAuto() || !history.length) return rows;
     return rows.map((row) => {
@@ -76,11 +79,19 @@
     });
   };
 
+  const installHistoryAccounting = () => {
+    positionSwapAsOf = historyPositionSwapAsOf;
+    portfolioSwap = historyPortfolioSwap;
+    derivedDaily = historyDerivedDaily;
+    document.documentElement.dataset.hiroseHistoryAccounting = '1';
+  };
+
   const bindControls = () => {
     const modeSelect = $('settingSwapMode');
     if (modeSelect && !modeSelect.dataset.historyAccountingBound) {
       modeSelect.dataset.historyAccountingBound = '1';
       modeSelect.addEventListener('change', () => setTimeout(() => {
+        installHistoryAccounting();
         try { renderAll(); } catch (_) {}
       }, 0));
     }
@@ -89,6 +100,7 @@
     if (unitsInput && !unitsInput.dataset.historyAccountingBound) {
       unitsInput.dataset.historyAccountingBound = '1';
       const rerender = () => setTimeout(() => {
+        installHistoryAccounting();
         try { renderAll(); } catch (_) {}
       }, 0);
       unitsInput.addEventListener('input', rerender);
@@ -97,8 +109,18 @@
   };
 
   const root = document.documentElement;
-  const observer = new MutationObserver(() => bindControls());
+  const observer = new MutationObserver(() => {
+    // Precision observer is registered before this patch, so on the same readiness
+    // mutation it restores fractional accounting first and this callback layers
+    // full Hirose history on top of it last.
+    installHistoryAccounting();
+    bindControls();
+    if (history.length) {
+      try { renderAll(); } catch (_) {}
+    }
+  });
   observer.observe(root, { attributes: true, attributeFilter: ['data-hirose-margin', 'data-hirose-feed-ready'] });
+  installHistoryAccounting();
   bindControls();
 
   fetch(`${FEED_URL}?history=${Date.now()}`, { cache: 'no-store' })
@@ -119,6 +141,7 @@
       root.dataset.hiroseHistoryReady = '1';
       root.dataset.hiroseHistoryStart = history[0].date;
       root.dataset.hiroseHistoryRecords = String(history.length);
+      installHistoryAccounting();
       bindControls();
       try { renderAll(); } catch (_) {}
     })
