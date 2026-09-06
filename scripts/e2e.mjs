@@ -20,11 +20,13 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.accountingV2 === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapDecimals === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
 
   console.log('appReady=', await page.locator('html').getAttribute('data-app-ready'));
   console.log('accountingV2=', await page.locator('html').getAttribute('data-accounting-v2'));
   console.log('swapDecimals=', await page.locator('html').getAttribute('data-swap-decimals'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
+  console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
 
   const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
   assert.match(manifestHref || '', /manifest\.webmanifest/, 'PWA manifest link is missing');
@@ -105,6 +107,13 @@ try {
   console.log('USDJPY -> TRYJPY derivation: PASS');
   console.log('swap 100.78901 x 1.23 -> 123 yen truncation: PASS');
 
+  // Add a second day with a large FX move so the phone calendar must compact the value.
+  await page.locator('#dailyDate').fill('2026-09-07');
+  await page.locator('#dailyRate').fill('47.0000');
+  await page.locator('#dailyUsdJpy').fill('158.400');
+  await page.locator('#dailySwap').fill('100.78901');
+  await page.locator('#dailyForm button[type="submit"]').click();
+
   await page.locator('[data-tab="calendar"]').click();
   assert.equal(await page.locator('#view-calendar').evaluate((el) => el.classList.contains('active')), true, 'calendar view did not become active');
   const weekdayTexts = await page.locator('.calendar-weekdays span').allTextContents();
@@ -118,16 +127,31 @@ try {
     return count;
   });
   assert.equal(leadingEmpty, 2, `September 2026 should have 2 leading cells in Sunday-first calendar, got ${leadingEmpty}`);
+
   const sep6 = page.locator('.calendar-day[data-date="2026-09-06"]');
   assert.equal(await sep6.count(), 1, 'September 6 calendar cell is missing');
-  const sep6Text = await sep6.innerText();
-  assert.match(sep6Text, /NET/i, 'calendar cell does not show NET');
-  assert.match(sep6Text, /FX/i, 'calendar cell does not show FX');
-  assert.match(sep6Text, /SWAP/i, 'calendar cell does not show SWAP');
-  assert.match(sep6Text, /¥123/, `calendar cell does not show daily swap/net ¥123: ${sep6Text}`);
-  assert.match(sep6Text, /¥0/, `calendar cell does not show daily FX ¥0: ${sep6Text}`);
-  console.log('Sunday-first calendar: PASS');
-  console.log('calendar Net / FX / Swap breakdown: PASS');
+  assert.equal(await sep6.locator('.calendar-label-mobile').nth(0).innerText(), 'F', 'mobile FX label is not compact');
+  assert.equal(await sep6.locator('.calendar-label-mobile').nth(1).innerText(), 'S', 'mobile SWAP label is not compact');
+  assert.match(await sep6.innerText(), /¥123/, 'small mobile calendar values should remain full yen values');
+
+  const sep7 = page.locator('.calendar-day[data-date="2026-09-07"]');
+  assert.equal(await sep7.count(), 1, 'September 7 calendar cell is missing');
+  const mobileValues = await sep7.locator('.calendar-value-mobile').allTextContents();
+  assert.ok(mobileValues.some((v) => /4\.2万/.test(v)), `mobile NET was not compacted to 万: ${mobileValues.join(' | ')}`);
+  assert.ok(mobileValues.some((v) => /4\.1万/.test(v)), `mobile FX was not compacted to 万: ${mobileValues.join(' | ')}`);
+  assert.ok(mobileValues.some((v) => /¥123/.test(v)), `mobile swap under 10,000 should remain full yen: ${mobileValues.join(' | ')}`);
+  assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), true, 'mobile compact calendar value is not visible on phone');
+  assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), false, 'desktop full calendar value is visible on phone');
+  console.log('mobile calendar compact values: PASS');
+
+  // Desktop must keep the existing full-value calendar representation.
+  await page.setViewportSize({ width: 1200, height: 900 });
+  assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), true, 'desktop full calendar value is not visible at desktop width');
+  assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), false, 'mobile compact calendar value is visible at desktop width');
+  const desktopValues = await sep7.locator('.calendar-value-desktop').allTextContents();
+  assert.ok(desktopValues.some((v) => /¥41,577/.test(v)), `desktop NET should remain full yen: ${desktopValues.join(' | ')}`);
+  assert.ok(desktopValues.some((v) => /¥41,454/.test(v)), `desktop FX should remain full yen: ${desktopValues.join(' | ')}`);
+  console.log('desktop calendar full values preserved: PASS');
 
   await page.locator('[data-tab="risk"]').click();
   assert.equal(await page.locator('#view-risk').evaluate((el) => el.classList.contains('active')), true, 'risk view did not become active');
