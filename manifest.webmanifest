@@ -1,0 +1,20 @@
+{
+  "name": "ドルとリラ",
+  "short_name": "ドルとリラ",
+  "description": "USD/TRYポジション・スワップ・為替損益管理",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090b0f",
+  "theme_color": "#090b0f",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "./icon-dollar-lira.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
