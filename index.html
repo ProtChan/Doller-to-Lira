@@ -9,9 +9,9 @@
   <meta http-equiv="Expires" content="0" />
   <title>ドルとリラ | USD/TRY Position Manager</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260906-1616" />
+  <link rel="stylesheet" href="./styles.css?v=20260906-1100" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
-  <script src="./runtime-20260906-1616.js" defer></script>
+  <script src="./runtime-20260906-1100.js" defer></script>
 </head>
 <body>
   <div class="shell">
@@ -21,7 +21,7 @@
         <div><h1>ドルとリラ</h1><p>USD/TRY POSITION MANAGER</p></div>
       </div>
       <div class="header-actions">
-        <span class="local-status"><i></i>LOCAL · 1616</span>
+        <span class="local-status"><i></i>LOCAL · 1100</span>
         <button class="text-btn" id="openBackupBtn" type="button">バックアップ</button>
         <button class="settings-btn" id="openSettingsBtn" type="button">設定</button>
       </div>
@@ -67,9 +67,10 @@
               <label>日付<input type="date" id="quickDailyDate" required /></label>
               <label>USD/TRY<input type="number" id="quickDailyRate" step="0.0001" min="0" required /></label>
               <div class="form-two">
-                <label>TRY/JPY<input type="number" id="quickDailyTryJpy" step="0.0001" min="0" /></label>
-                <label>Swap / lot<input type="number" id="quickDailySwap" step="1" /></label>
+                <label>USD/JPY<input type="number" id="quickDailyUsdJpy" step="0.001" min="0" required /></label>
+                <label>Swap / 1 lot<input type="number" id="quickDailySwap" step="0.01" /></label>
               </div>
+              <small>TRY/JPY は USD/JPY ÷ USD/TRY で内部計算。Swap は × lot 後、1円未満を切り捨て。</small>
               <button class="solid-btn" type="submit">日次データを保存</button>
             </form>
             <div class="quick-divider"></div>
@@ -119,13 +120,13 @@
         <form id="dailyForm" class="daily-entry-bar">
           <label>日付<input type="date" id="dailyDate" required /></label>
           <label>USD/TRY<input type="number" id="dailyRate" step="0.0001" min="0" required /></label>
-          <label>TRY/JPY<input type="number" id="dailyTryJpy" step="0.0001" min="0" /></label>
-          <label>Swap / lot (円)<input type="number" id="dailySwap" step="1" /></label>
+          <label>USD/JPY<input type="number" id="dailyUsdJpy" step="0.001" min="0" required /></label>
+          <label>Swap / 1 lot (円)<input type="number" id="dailySwap" step="0.01" /></label>
           <button class="solid-btn" type="submit">保存</button>
         </form>
         <div class="data-table-wrap daily-table-wrap">
           <table class="data-table">
-            <thead><tr><th>日付</th><th>USD/TRY</th><th>TRY/JPY</th><th>Swap/lot</th><th>保有lot</th><th>FX損益</th><th>累積Swap</th><th>総損益</th><th>日次損益</th><th></th></tr></thead>
+            <thead><tr><th>日付</th><th>USD/TRY</th><th>USD/JPY</th><th>TRY/JPY<br><small>自動計算</small></th><th>Swap/lot</th><th>保有lot</th><th>FX損益</th><th>累積Swap</th><th>総損益</th><th>日次損益</th><th></th></tr></thead>
             <tbody id="dailyTableBody"></tbody>
           </table>
         </div>
@@ -147,7 +148,7 @@
           <span class="section-meta" id="riskStatusLabel">—</span>
         </div>
         <div class="risk-grid">
-          <div class="risk-chart-block"><div class="chart-title"><strong>USD/TRY と推定ロスカットライン</strong><span>現在レートとの距離</span></div><div class="chart-medium"><canvas id="lcChart"></canvas></div></div>
+          <div class="risk-chart-block"><div class="chart-title"><strong>USD/TRY と推定ロスカットライン</strong><span>USD/JPY固定・TRY/JPYを再計算</span></div><div class="chart-medium"><canvas id="lcChart"></canvas></div></div>
           <div class="risk-chart-block"><div class="chart-title"><strong>証拠金維持率</strong><span>LC閾値を併記</span></div><div class="chart-medium"><canvas id="maintenanceChart"></canvas></div></div>
         </div>
         <div class="risk-table" id="riskFacts"></div>
@@ -168,8 +169,8 @@
       <label><span>1 lot の通貨数 <em>通貨</em></span><input type="number" id="settingUnits" step="1" min="1" /></label>
       <label><span>最大レバレッジ <em>倍</em></span><input type="number" id="settingLeverage" step="0.1" min="1" /></label>
       <label><span>ロスカット閾値 <em>%</em></span><input type="number" id="settingLcThreshold" step="1" min="1" /></label>
-      <label><span>既定 TRY/JPY</span><input type="number" id="settingTryJpy" step="0.0001" min="0" /></label>
-      <label><span>既定 Swap / lot <em>円</em></span><input type="number" id="settingSwap" step="1" /></label>
+      <label style="display:none"><span>既定 TRY/JPY</span><input type="number" id="settingTryJpy" step="0.0001" min="0" /></label>
+      <label><span>既定 Swap / 1 lot <em>円</em></span><input type="number" id="settingSwap" step="0.01" /></label>
     </div>
     <div class="autosave-status" id="settingsSaveStatus"><i></i> 自動保存</div>
     <button class="danger-link" id="resetAllBtn" type="button">全データを初期化</button>
