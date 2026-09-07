@@ -6,8 +6,8 @@
   "closeField": "終値",
   "generatedFromUpload": "USDTRY_60分足_ASK_202609072255.zip",
   "historyStart": "2026-07-10",
-  "historyEnd": "2026-09-04",
-  "records": 41,
+  "historyEnd": "2026-09-07",
+  "records": 42,
   "history": [
     {"date":"2026-07-10","usdTryAskClose23":46.9859,"usdJpyAskClose23":161.83},
     {"date":"2026-07-13","usdTryAskClose23":47.0032,"usdJpyAskClose23":162.35},
@@ -49,6 +49,7 @@
     {"date":"2026-09-01","usdTryAskClose23":48.2772,"usdJpyAskClose23":160.077},
     {"date":"2026-09-02","usdTryAskClose23":48.2982,"usdJpyAskClose23":158.744},
     {"date":"2026-09-03","usdTryAskClose23":48.3153,"usdJpyAskClose23":155.422},
-    {"date":"2026-09-04","usdTryAskClose23":48.4438,"usdJpyAskClose23":156.12}
+    {"date":"2026-09-04","usdTryAskClose23":48.4438,"usdJpyAskClose23":156.12},
+    {"date":"2026-09-07","usdTryAskClose23":48.4351,"usdJpyAskClose23":154.289}
   ]
 }
