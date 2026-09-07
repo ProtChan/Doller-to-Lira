@@ -5,7 +5,13 @@ const targetUrl = process.env.TEST_URL || 'http://127.0.0.1:4173/';
 const browserName = (process.env.BROWSER || 'chromium').toLowerCase();
 const browserType = browserName === 'webkit' ? webkit : chromium;
 const browser = await browserType.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+// This test must intercept the Hirose JSON directly to simulate a future official row.
+// Block service workers here only so the synthetic response is not hidden behind the PWA fetch layer.
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  isMobile: true,
+  serviceWorkers: 'block'
+});
 const page = await context.newPage();
 const pageErrors = [];
 page.on('pageerror', (err) => pageErrors.push(err.message));
