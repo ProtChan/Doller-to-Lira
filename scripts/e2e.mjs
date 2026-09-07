@@ -150,7 +150,7 @@ try {
   await page.locator('#closeSettingsBtn').click();
   assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'manual', 'manual swap mode was not restored');
 
-  await page.locator('#dailyDate').fill('2026-09-06');
+  await page.locator('#dailyDate').fill('2026-09-08');
   await page.locator('#dailyRate').fill('48.0000');
   await page.locator('#dailyUsdJpy').fill('158.400');
   await page.locator('#dailySwap').fill('100.78901');
@@ -158,7 +158,7 @@ try {
 
   const stored = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    const row = state.daily.find((d) => d.date === '2026-09-06');
+    const row = state.daily.find((d) => d.date === '2026-09-08');
     return {
       row,
       swapSnapshot: window.__DTL_SWAP_SNAPSHOT__?.() || null,
@@ -186,7 +186,7 @@ try {
 
   // Add a second day with an FX move; at the 1,000-unit default the phone calendar
   // remains in full-yen display because these values stay below 10,000 yen.
-  await page.locator('#dailyDate').fill('2026-09-07');
+  await page.locator('#dailyDate').fill('2026-09-09');
   await page.locator('#dailyRate').fill('47.0000');
   await page.locator('#dailyUsdJpy').fill('158.400');
   await page.locator('#dailySwap').fill('100.78901');
@@ -206,27 +206,27 @@ try {
   });
   assert.equal(leadingEmpty, 2, `September 2026 should have 2 leading cells in Sunday-first calendar, got ${leadingEmpty}`);
 
-  const sep6 = page.locator('.calendar-day[data-date="2026-09-06"]');
-  assert.equal(await sep6.count(), 1, 'September 6 calendar cell is missing');
-  assert.equal(await sep6.locator('.calendar-label-mobile').nth(0).innerText(), 'F', 'mobile FX label is not compact');
-  assert.equal(await sep6.locator('.calendar-label-mobile').nth(1).innerText(), 'S', 'mobile SWAP label is not compact');
-  assert.match(await sep6.innerText(), /¥123/, 'small mobile calendar values should truncate sub-yen fractions');
+  const sep8 = page.locator('.calendar-day[data-date="2026-09-08"]');
+  assert.equal(await sep8.count(), 1, 'September 8 calendar cell is missing');
+  assert.equal(await sep8.locator('.calendar-label-mobile').nth(0).innerText(), 'F', 'mobile FX label is not compact');
+  assert.equal(await sep8.locator('.calendar-label-mobile').nth(1).innerText(), 'S', 'mobile SWAP label is not compact');
+  assert.match(await sep8.innerText(), /¥123/, 'small mobile calendar values should truncate sub-yen fractions');
 
-  const sep7 = page.locator('.calendar-day[data-date="2026-09-07"]');
-  assert.equal(await sep7.count(), 1, 'September 7 calendar cell is missing');
-  const mobileValues = await sep7.locator('.calendar-value-mobile').allTextContents();
+  const sep9 = page.locator('.calendar-day[data-date="2026-09-09"]');
+  assert.equal(await sep9.count(), 1, 'September 9 calendar cell is missing');
+  const mobileValues = await sep9.locator('.calendar-value-mobile').allTextContents();
   assert.ok(mobileValues.some((v) => /¥4,269/.test(v)), `mobile NET should remain full yen below 10,000: ${mobileValues.join(' | ')}`);
   assert.ok(mobileValues.some((v) => /¥4,145/.test(v)), `mobile FX should remain full yen below 10,000: ${mobileValues.join(' | ')}`);
   assert.ok(mobileValues.some((v) => /¥123/.test(v)), `mobile swap under 10,000 should truncate to full yen: ${mobileValues.join(' | ')}`);
-  assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), true, 'mobile compact calendar value is not visible on phone');
-  assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), false, 'desktop full calendar value is visible on phone');
+  assert.equal(await sep9.locator('.calendar-value-mobile').first().isVisible(), true, 'mobile compact calendar value is not visible on phone');
+  assert.equal(await sep9.locator('.calendar-value-desktop').first().isVisible(), false, 'desktop full calendar value is visible on phone');
   console.log('mobile calendar 1,000-unit values: PASS');
 
   // Desktop keeps full-yen calendar representation while truncating sub-yen fractions.
   await page.setViewportSize({ width: 1200, height: 900 });
-  assert.equal(await sep7.locator('.calendar-value-desktop').first().isVisible(), true, 'desktop full calendar value is not visible at desktop width');
-  assert.equal(await sep7.locator('.calendar-value-mobile').first().isVisible(), false, 'mobile compact calendar value is visible at desktop width');
-  const desktopValues = await sep7.locator('.calendar-value-desktop').allTextContents();
+  assert.equal(await sep9.locator('.calendar-value-desktop').first().isVisible(), true, 'desktop full calendar value is not visible at desktop width');
+  assert.equal(await sep9.locator('.calendar-value-mobile').first().isVisible(), false, 'mobile compact calendar value is visible at desktop width');
+  const desktopValues = await sep9.locator('.calendar-value-desktop').allTextContents();
   assert.ok(desktopValues.some((v) => /¥4,269/.test(v)), `desktop NET should remain full yen: ${desktopValues.join(' | ')}`);
   assert.ok(desktopValues.some((v) => /¥4,145/.test(v)), `desktop FX should truncate sub-yen fraction: ${desktopValues.join(' | ')}`);
   console.log('desktop calendar full values preserved: PASS');
