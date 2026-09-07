@@ -1,6 +1,22 @@
 // Closed USD/TRY positions must use the broker's actual TRY/JPY conversion rate
 // at settlement, not the later 23:00 synthetic USDJPY/USDTRY cross.
 (() => {
+  const ensureCloseConversionInput = () => {
+    if ($('closeTryJpy')) return $('closeTryJpy');
+    const modalForm = $('closePositionForm')?.querySelector('.modal-form');
+    if (!modalForm) return null;
+    const label = document.createElement('label');
+    label.className = 'close-conversion-field';
+    label.innerHTML = '円換算レート (TRY/JPY)<input type="number" id="closeTryJpy" step="0.000001" min="0" inputmode="decimal" required /><small>ヒロセの約定履歴に表示される「円換算レート」を入力</small>';
+    modalForm.appendChild(label);
+    const style = document.createElement('style');
+    style.textContent = '.close-conversion-field small{display:block;margin-top:5px;color:var(--muted2);font-size:8px;line-height:1.4;font-weight:500}';
+    document.head.appendChild(style);
+    return $('closeTryJpy');
+  };
+
+  ensureCloseConversionInput();
+
   const closeTryJpyValue = (p, fallback = 0) => {
     const explicit = Number(p?.closeTryJpy);
     if (Number.isFinite(explicit) && explicit > 0) return explicit;
@@ -32,6 +48,7 @@
   openCloseDialog = function(id) {
     const p = state.positions.find((x) => x.id === id);
     if (!p) return;
+    ensureCloseConversionInput();
     baseOpenCloseDialogConversion(id);
     const date = p.closeDate || $('closeDate')?.value || latestSnapshot()?.date || isoToday();
     if ($('closeDate')) $('closeDate').value = date;
