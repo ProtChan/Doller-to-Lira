@@ -1,12 +1,18 @@
-// Load the provisional-Hirose-entry patch only after the async Hirose integration
-// has installed its form handlers. Direct eval keeps access to the app lexical scope.
+// Load provisional-Hirose-entry handling after both async Hirose layers have settled.
+// This ensures the initial reconciliation can immediately upgrade previously pending
+// rows when the official date has appeared in the persisted history.
 (() => {
   const root = document.documentElement;
   let loaded = false;
+  let observer = null;
+
+  const historySettled = () => root.dataset.hiroseHistoryReady === '1' || root.dataset.hiroseHistoryReady === '0';
+  const readyToLoad = () => root.dataset.hiroseMargin === '1' && historySettled();
 
   const loadPendingPatch = () => {
-    if (loaded || root.dataset.hiroseMargin !== '1') return;
+    if (loaded || !readyToLoad()) return;
     loaded = true;
+    observer?.disconnect();
     fetch(`./patch-hirose-pending-20260907.js?t=${Date.now()}`, { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error(`Hirose pending patch HTTP ${r.status}`);
@@ -21,13 +27,12 @@
       });
   };
 
-  if (root.dataset.hiroseMargin === '1') loadPendingPatch();
+  if (readyToLoad()) loadPendingPatch();
   else {
-    const observer = new MutationObserver(() => {
-      if (root.dataset.hiroseMargin !== '1') return;
-      observer.disconnect();
-      loadPendingPatch();
+    observer = new MutationObserver(loadPendingPatch);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-hirose-margin', 'data-hirose-history-ready']
     });
-    observer.observe(root, { attributes: true, attributeFilter: ['data-hirose-margin'] });
   }
 })();
