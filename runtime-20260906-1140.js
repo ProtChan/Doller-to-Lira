@@ -42,12 +42,16 @@
       if (!r.ok) throw new Error(`Hirose history patch HTTP ${r.status}`);
       return r.text();
     }),
+    fetch(`./patch-hirose-rate-history-20260907.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(`Hirose rate history patch HTTP ${r.status}`);
+      return r.text();
+    }),
     fetch(`./patch-hirose-pending-bootstrap-20260907.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error(`Hirose pending bootstrap HTTP ${r.status}`);
       return r.text();
     })
   ])
-    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hirosePendingBootstrapSource]) => {
+    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource]) => {
       // JPY values retain their fractional precision internally. The common display
       // formatter truncates toward zero only at render time instead of rounding.
       const oldMoneyBody = "${Number(v) < 0 ? '-' : ''}¥${Math.abs(Number(v)).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}";
@@ -60,7 +64,7 @@
       const defaultUnitsNormalizedAppSource = displayNormalizedAppSource.replace('unitsPerLot: 10000', 'unitsPerLot: 1000');
       if (defaultUnitsNormalizedAppSource === displayNormalizedAppSource) throw new Error('default lot-size patch target missing');
 
-      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hirosePendingBootstrapSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
     })
     .catch((error) => showError(error?.message || String(error)));
