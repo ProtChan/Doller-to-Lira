@@ -1,10 +1,22 @@
-// Allow daily snapshots even when the Hirose swap for that date is not published yet.
-// Missing official swap is stored as a provisional 0 JPY and automatically upgraded
-// once the persisted Hirose history contains that date.
+// Hirose swap accounting convention:
+// - The broker's displayed date is the rollover night/source date.
+// - The site credits that amount on the following calendar day.
+// - Positions opened on the credit date do not receive it; positions closed on the
+//   credit date do receive it (handled by the history accounting layer).
+// Missing future source data remains provisional 0 JPY and upgrades automatically.
 (() => {
   const MODE_KEY = 'dollar-to-lira:swap-mode:v1';
   const isAuto = () => localStorage.getItem(MODE_KEY) === 'hirose';
   const root = document.documentElement;
+
+  const shiftIsoDate = (date, days) => {
+    const d = new Date(`${date}T12:00:00Z`);
+    if (!Number.isFinite(d.getTime())) return '';
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const sourceDateForCredit = (creditDate) => shiftIsoDate(creditDate, -1);
 
   const historyRows = () => {
     try {
@@ -16,19 +28,40 @@
     }
   };
 
-  const officialRow = (date) => historyRows().find((row) => row?.date === date) || null;
+  const sourceRow = (sourceDate) => historyRows().find((row) => row?.date === sourceDate) || null;
 
-  const scaledOfficial = (date) => {
-    const row = officialRow(date);
-    if (!row) return null;
-    const sourceUnit = Number(row.unit || 1000);
+  const isWeekend = (date) => {
+    const d = new Date(`${date}T12:00:00Z`);
+    const day = d.getUTCDay();
+    return day === 0 || day === 6;
+  };
+
+  const resolutionForCreditDate = (creditDate) => {
+    const sourceDate = sourceDateForCredit(creditDate);
+    const rows = historyRows();
+    const row = rows.find((item) => item?.date === sourceDate) || null;
+    if (row) return { status: 'official', creditDate, sourceDate, row };
+
+    const latestSourceDate = rows.length ? String(rows[rows.length - 1]?.date || '') : '';
+    // Weekend source dates never get their own official table row. A missing date
+    // inside already-published history is likewise a confirmed zero/no posting day.
+    if (isWeekend(sourceDate) || (latestSourceDate && sourceDate <= latestSourceDate)) {
+      return { status: 'zero', creditDate, sourceDate, row: null };
+    }
+    return { status: 'pending', creditDate, sourceDate, row: null };
+  };
+
+  const scaledOfficial = (creditDate) => {
+    const resolution = resolutionForCreditDate(creditDate);
+    if (resolution.status !== 'official' || !resolution.row) return { ...resolution, shortPerLot: 0, longPerLot: 0 };
+    const sourceUnit = Number(resolution.row.unit || 1000);
     const siteUnit = Number(state.settings.unitsPerLot || 1000);
-    if (!(sourceUnit > 0) || !(siteUnit > 0)) return null;
+    if (!(sourceUnit > 0) || !(siteUnit > 0)) return { ...resolution, status: 'pending', shortPerLot: 0, longPerLot: 0 };
     const factor = siteUnit / sourceUnit;
     return {
-      row,
-      shortPerLot: Number(row.sellJpy || 0) * factor,
-      longPerLot: Number(row.buyJpy || 0) * factor
+      ...resolution,
+      shortPerLot: Number(resolution.row.sellJpy || 0) * factor,
+      longPerLot: Number(resolution.row.buyJpy || 0) * factor
     };
   };
 
@@ -38,50 +71,96 @@
     const input = $(prefix + 'Swap');
     const date = $(prefix + 'Date')?.value;
     if (!input || !date || !isAuto()) {
-      if (input) delete input.dataset.hirosePending;
+      if (input) {
+        delete input.dataset.hirosePending;
+        delete input.dataset.hiroseZero;
+      }
       return;
     }
 
+    delete input.dataset.hirosePending;
+    delete input.dataset.hiroseZero;
+    input.readOnly = true;
+    input.dataset.hiroseAuto = '1';
+
     const official = scaledOfficial(date);
-    if (official) {
-      delete input.dataset.hirosePending;
-      // The main Hirose patch normally fills this value. Re-assert it here so an
-      // entry that was provisional becomes official immediately after history refresh.
+    const note = noteFor(prefix);
+    if (official.status === 'official') {
       input.value = String(official.shortPerLot);
-      input.readOnly = true;
-      input.dataset.hiroseAuto = '1';
-      const note = noteFor(prefix);
-      if (note) note.textContent = `ヒロセ USD/TRY 売り · ${official.row.days}日分 · 1,000通貨 ${official.row.sellJpy}円 → ${Number(state.settings.unitsPerLot).toLocaleString()}通貨 ${official.shortPerLot.toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
+      if (note) {
+        note.textContent = `ヒロセ ${official.sourceDate}表記 → ${date}計上 · ${official.row.days}日分 · 1,000通貨 ${official.row.sellJpy}円 → ${Number(state.settings.unitsPerLot).toLocaleString()}通貨 ${official.shortPerLot.toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
+      }
       return;
     }
 
     input.value = '0';
-    input.readOnly = true;
-    input.dataset.hiroseAuto = '1';
+    if (official.status === 'zero') {
+      input.dataset.hiroseZero = '1';
+      if (note) note.textContent = `${official.sourceDate}表記なし → ${date}計上 0円`;
+      return;
+    }
+
     input.dataset.hirosePending = '1';
-    const note = noteFor(prefix);
-    if (note) note.textContent = '未確定 · 計算上は0円として保存（公式Swap取得後に自動反映）';
+    if (note) note.textContent = `${official.sourceDate}表記 未確定 → ${date}は計算上0円（取得後に自動反映）`;
   };
 
-  const upgradePendingRows = () => {
+  const sourceFieldsFor = (resolution) => {
+    if (resolution.status === 'official') {
+      return {
+        swapPerLot: resolution.shortPerLot,
+        swapSource: 'hirose',
+        swapPending: false,
+        swapLongPerLot: resolution.longPerLot,
+        swapSourceDate: resolution.sourceDate,
+        swapCreditDate: resolution.creditDate,
+        swapSourceDays: Number(resolution.row.days || 0),
+        swapSourceUnit: Number(resolution.row.unit || 1000),
+        swapSourceSellJpy: Number(resolution.row.sellJpy || 0),
+        swapSourceBuyJpy: Number(resolution.row.buyJpy || 0)
+      };
+    }
+    if (resolution.status === 'zero') {
+      return {
+        swapPerLot: 0,
+        swapSource: 'hirose-zero',
+        swapPending: false,
+        swapLongPerLot: 0,
+        swapSourceDate: resolution.sourceDate,
+        swapCreditDate: resolution.creditDate,
+        swapSourceDays: 0,
+        swapSourceUnit: 1000,
+        swapSourceSellJpy: 0,
+        swapSourceBuyJpy: 0
+      };
+    }
+    return {
+      swapPerLot: 0,
+      swapSource: 'hirose-pending',
+      swapPending: true,
+      swapLongPerLot: 0,
+      swapSourceDate: resolution.sourceDate,
+      swapCreditDate: resolution.creditDate,
+      swapSourceDays: 0,
+      swapSourceUnit: 1000,
+      swapSourceSellJpy: 0,
+      swapSourceBuyJpy: 0
+    };
+  };
+
+  const reconcileAutoRows = () => {
     if (!Array.isArray(state.daily)) return false;
     let changed = false;
     state.daily = state.daily.map((row) => {
-      if (!row?.swapPending && row?.swapSource !== 'hirose-pending') return row;
-      const official = scaledOfficial(row.date);
-      if (!official) return row;
-      changed = true;
-      return {
-        ...row,
-        swapPerLot: official.shortPerLot,
-        swapSource: 'hirose',
-        swapPending: false,
-        swapLongPerLot: official.longPerLot,
-        swapSourceDays: Number(official.row.days || 0),
-        swapSourceUnit: Number(official.row.unit || 1000),
-        swapSourceSellJpy: Number(official.row.sellJpy || 0),
-        swapSourceBuyJpy: Number(official.row.buyJpy || 0)
-      };
+      const isHiroseRow = row?.swapPending || String(row?.swapSource || '').startsWith('hirose');
+      if (!isHiroseRow || !row?.date) return row;
+      const resolution = scaledOfficial(row.date);
+      const next = { ...row, ...sourceFieldsFor(resolution) };
+      const keys = [
+        'swapPerLot','swapSource','swapPending','swapLongPerLot','swapSourceDate','swapCreditDate',
+        'swapSourceDays','swapSourceUnit','swapSourceSellJpy','swapSourceBuyJpy'
+      ];
+      if (keys.some((key) => row[key] !== next[key])) changed = true;
+      return next;
     });
     if (changed) {
       state.updatedAt = new Date().toISOString();
@@ -92,10 +171,7 @@
 
   const baseSaveDailyFromPending = saveDailyFrom;
   saveDailyFrom = function(prefix) {
-    const input = $(prefix + 'Swap');
-    if (!isAuto() || input?.dataset.hirosePending !== '1') {
-      return baseSaveDailyFromPending(prefix);
-    }
+    if (!isAuto()) return baseSaveDailyFromPending(prefix);
 
     const date = $(prefix + 'Date')?.value;
     const rate = Number($(prefix + 'Rate')?.value);
@@ -105,21 +181,28 @@
       return false;
     }
 
+    const resolution = scaledOfficial(date);
     const tryJpy = usdJpy / rate;
+    const idx = state.daily.findIndex((d) => d.date === date);
+    const existing = idx >= 0 ? state.daily[idx] : {};
     const row = {
+      ...existing,
       date,
       rate,
       usdJpy,
       tryJpy,
-      swapPerLot: 0,
-      swapSource: 'hirose-pending',
-      swapPending: true
+      ...sourceFieldsFor(resolution)
     };
-    const idx = state.daily.findIndex((d) => d.date === date);
     if (idx >= 0) state.daily[idx] = row;
     else state.daily.push(row);
     calendarCursor = monthFromLatest();
-    saveState(idx >= 0 ? '日次データを更新しました · Swap未確定' : '日次データを保存しました · Swap未確定');
+
+    const suffix = resolution.status === 'pending'
+      ? ' · Swap未確定'
+      : resolution.status === 'zero'
+        ? ' · Swap 0円'
+        : ` · ${resolution.sourceDate}表記分`;
+    saveState(`${idx >= 0 ? '日次データを更新しました' : '日次データを保存しました'}${suffix}`);
     setTimeout(() => syncPendingInput(prefix), 0);
     return true;
   };
@@ -164,10 +247,12 @@
   });
 
   const refresh = () => {
-    const upgraded = upgradePendingRows();
+    const changed = reconcileAutoRows();
     syncPendingInput('daily');
     syncPendingInput('quickDaily');
-    if (upgraded) {
+    const status = $('hiroseFeedStatus');
+    if (status && !status.textContent.includes('翌日計上')) status.textContent += ' · 翌日計上';
+    if (changed) {
       try { renderAll(); } catch (_) {}
     } else {
       try { renderDailyTable(); } catch (_) {}
@@ -180,6 +265,19 @@
   });
   observer.observe(root, { attributes: true, attributeFilter: ['data-hirose-feed-ready', 'data-hirose-history-ready', 'data-swap-input-mode'] });
 
+  window.__DTL_HIROSE_SWAP_RESOLUTION__ = (creditDate) => {
+    const resolution = scaledOfficial(creditDate);
+    return {
+      status: resolution.status,
+      sourceDate: resolution.sourceDate,
+      creditDate: resolution.creditDate,
+      shortPerLot: resolution.shortPerLot,
+      longPerLot: resolution.longPerLot,
+      row: resolution.row ? { ...resolution.row } : null
+    };
+  };
+
   refresh();
   root.dataset.hirosePendingEntries = '1';
+  root.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
 })();
