@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = '20260906-1140';
+  const BUILD = '20260908-1815';
   const showError = (message) => {
     document.documentElement.dataset.appLoadError = message;
     const bar = document.createElement('div');
@@ -8,72 +8,40 @@
     document.body.appendChild(bar);
   };
 
+  const source = (path, label) => fetch(`./${path}?runtime=${BUILD}`, { cache: 'force-cache' }).then((r) => {
+    if (!r.ok) throw new Error(`${label} HTTP ${r.status}`);
+    return r.text();
+  });
+
   window.__DTL_BUILD__ = BUILD;
   Promise.all([
-    fetch(`./app.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`app.js HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-20260906-1100.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`accounting patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-swap-decimals-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`swap decimal patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-calendar-breakdown-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`calendar patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-mobile-pwa-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`mobile/PWA patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-access-layout-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`access/layout patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-swap-precision-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`swap precision patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-hirose-history-20260906.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`Hirose history patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-hirose-rate-history-20260907.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`Hirose rate history patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-hirose-pending-bootstrap-20260907.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`Hirose pending bootstrap HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-close-conversion-20260908.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`close conversion patch HTTP ${r.status}`);
-      return r.text();
-    }),
-    fetch(`./patch-capital-history-20260908.js?runtime=${BUILD}`, { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(`capital history patch HTTP ${r.status}`);
-      return r.text();
-    })
+    source('app.js', 'app.js'),
+    source('patch-20260906-1100.js', 'accounting patch'),
+    source('patch-swap-decimals-20260906.js', 'swap decimal patch'),
+    source('patch-calendar-breakdown-20260906.js', 'calendar patch'),
+    source('patch-mobile-pwa-20260906.js', 'mobile/PWA patch'),
+    source('patch-access-layout-20260906.js', 'access/layout patch'),
+    source('patch-swap-precision-20260906.js', 'swap precision patch'),
+    source('patch-hirose-history-20260906.js', 'Hirose history patch'),
+    source('patch-hirose-rate-history-20260907.js', 'Hirose rate history patch'),
+    source('patch-hirose-pending-bootstrap-20260907.js', 'Hirose pending bootstrap'),
+    source('patch-close-conversion-20260908.js', 'close conversion patch'),
+    source('patch-capital-history-20260908.js', 'capital history patch'),
+    source('patch-rate-source-edit-performance-20260908.js', 'rate/edit/performance patch')
   ])
-    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, closeConversionSource, capitalHistorySource]) => {
-      // JPY values retain their fractional precision internally. The common display
-      // formatter truncates toward zero only at render time instead of rounding.
+    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, closeConversionSource, capitalHistorySource, rateEditPerformanceSource]) => {
       const oldMoneyBody = "${Number(v) < 0 ? '-' : ''}¥${Math.abs(Number(v)).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}";
       const newMoneyBody = "${Math.trunc(Number(v)) < 0 ? '-' : ''}¥${Math.abs(Math.trunc(Number(v))).toLocaleString('ja-JP')}";
       const displayNormalizedAppSource = appSource.replace(oldMoneyBody, newMoneyBody);
       if (displayNormalizedAppSource === appSource) throw new Error('JPY display formatter patch target missing');
 
-      // New installs/reset defaults use 1 lot = 1,000 units. Existing persisted
-      // user settings still override this through loadState's settings merge.
       const defaultUnitsNormalizedAppSource = displayNormalizedAppSource.replace('unitsPerLot: 10000', 'unitsPerLot: 1000');
       if (defaultUnitsNormalizedAppSource === displayNormalizedAppSource) throw new Error('default lot-size patch target missing');
 
-      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${closeConversionSource}\n${capitalHistorySource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
+      const status = document.querySelector('.local-status');
+      if (status) status.innerHTML = '<i></i>LOCAL · 1815';
     })
     .catch((error) => showError(error?.message || String(error)));
 })();
