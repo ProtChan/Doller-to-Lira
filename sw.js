@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dollar-to-lira-pwa-1141';
+const CACHE_NAME = 'dollar-to-lira-pwa-1815';
 const APP_SHELL = [
   './',
   './index.html',
@@ -25,26 +25,45 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+const put = async (request, response) => {
+  if (response && response.ok) {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }
+  return response;
+};
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response && response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })
-      .catch(async () => {
-        const cached = await caches.match(request);
-        if (cached) return cached;
-        if (request.mode === 'navigate') return caches.match('./index.html');
+  const isNavigation = request.mode === 'navigate';
+  const isData = url.pathname.includes('/data/');
+  const isImmutableAsset = !isNavigation && !isData && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
+
+  if (isImmutableAsset) {
+    event.respondWith((async () => {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      try {
+        return await put(request, await fetch(request));
+      } catch (_) {
         throw new Error('offline');
-      })
-  );
+      }
+    })());
+    return;
+  }
+
+  event.respondWith((async () => {
+    try {
+      return await put(request, await fetch(request));
+    } catch (_) {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      if (isNavigation) return caches.match('./index.html');
+      throw new Error('offline');
+    }
+  })());
 });
