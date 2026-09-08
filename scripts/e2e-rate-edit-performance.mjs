@@ -60,6 +60,9 @@ try {
 
   await page.locator('#dailyDate').fill('2026-06-30');
   await page.locator('#dailyDate').dispatchEvent('change');
+  // Date-source listeners settle on a zero-delay timer. A real user cannot type
+  // before that turn completes, so let the browser reach the same stable state.
+  await page.waitForTimeout(50);
   await page.locator('#dailyRate').fill('47.1234');
   await page.locator('#dailyUsdJpy').fill('158.25');
   await page.locator('#dailySwap').fill('100.25');
