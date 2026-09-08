@@ -60,29 +60,20 @@ try {
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-10表記 → 2026-07-13計上/, 'Monday note must show Friday source date');
   console.log('weekend daily input 0 / Monday Friday-source auto-fill: PASS');
 
-  // Seed a position directly into localStorage for the accounting/calendar check.
-  // This avoids a WebKit-only click/re-render race unrelated to swap accounting.
+  // Submit the existing position form programmatically. This exercises the app's real
+  // save handler without relying on a WebKit-sensitive click/re-render sequence.
   await page.evaluate(() => {
-    const key = 'dollar-to-lira:v1';
-    const saved = JSON.parse(localStorage.getItem(key));
-    saved.positions = Array.isArray(saved.positions) ? saved.positions : [];
-    saved.positions.push({
-      id: 'weekend-test-position',
-      date: '2026-07-10',
-      side: 'short',
-      entryRate: 48,
-      lots: 1,
-      memo: 'weekend credit e2e',
-      closeDate: null,
-      closeRate: null
-    });
-    localStorage.setItem(key, JSON.stringify(saved));
+    document.getElementById('positionDate').value = '2026-07-10';
+    document.getElementById('positionSide').value = 'short';
+    document.getElementById('entryRate').value = '48.0000';
+    document.getElementById('entryLots').value = '1';
+    document.getElementById('positionMemo').value = 'weekend credit e2e';
+    document.getElementById('positionForm').requestSubmit();
   });
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hirosePendingEntries === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCalendarRule === 'next-business-day-weekend-skip', { timeout: 15000 });
+  await page.waitForFunction(() => {
+    const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
+    return Array.isArray(saved.positions) && saved.positions.some((p) => p.date === '2026-07-10' && p.side === 'short' && Number(p.lots) === 1);
+  }, { timeout: 10000 });
 
   const positionRules = await page.evaluate(() => ({
     throughFriday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', side: 'short', lots: 1 }, '2026-07-10'),
