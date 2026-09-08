@@ -34,6 +34,7 @@ jobs:
           node --check scripts/e2e-hirose-rates.mjs
           node --check scripts/e2e-close-conversion.mjs
           node --check scripts/e2e-capital-history.mjs
+          node --check scripts/e2e-hirose-weekend.mjs
       - name: Runtime smoke test
         run: node smoke-runtime.js
       - name: Install browser test runtimes
@@ -50,6 +51,7 @@ jobs:
           BROWSER=chromium node scripts/e2e-hirose-rates.mjs
           BROWSER=chromium node scripts/e2e-close-conversion.mjs
           BROWSER=chromium node scripts/e2e-capital-history.mjs
+          BROWSER=chromium node scripts/e2e-hirose-weekend.mjs
       - name: Real WebKit DOM interaction test (local build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http-webkit.log 2>&1 &
@@ -60,6 +62,7 @@ jobs:
           BROWSER=webkit node scripts/e2e-hirose-rates.mjs
           BROWSER=webkit node scripts/e2e-close-conversion.mjs
           BROWSER=webkit node scripts/e2e-capital-history.mjs
+          BROWSER=webkit node scripts/e2e-hirose-weekend.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
@@ -81,6 +84,7 @@ jobs:
           node scripts/e2e-hirose-rates.mjs
           node scripts/e2e-close-conversion.mjs
           node scripts/e2e-capital-history.mjs
+          node scripts/e2e-hirose-weekend.mjs
       - name: Real WebKit DOM interaction test (deployed Pages)
         env:
           TEST_URL: ${{ steps.deployment.outputs.page_url }}
@@ -91,3 +95,4 @@ jobs:
           node scripts/e2e-hirose-rates.mjs
           node scripts/e2e-close-conversion.mjs
           node scripts/e2e-capital-history.mjs
+          node scripts/e2e-hirose-weekend.mjs
