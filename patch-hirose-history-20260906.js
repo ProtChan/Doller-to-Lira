@@ -1,6 +1,6 @@
 // Apply the persisted Hirose USD/TRY history to accounting while auto mode is enabled.
-// Hirose's displayed swap date is treated as the rollover night; accounting credits it
-// on the following calendar day. A position receives a credit only when
+// Hirose's displayed swap date is treated as the rollover night/source date; accounting credits it
+// on the following business day (Saturday/Sunday are skipped). A position receives a credit only when
 // openDate < creditDate <= closeDate (or there is no closeDate).
 (() => {
   const FEED_URL = './data/hirose-usdtry-swap.json';
@@ -11,14 +11,29 @@
 
   const isAuto = () => localStorage.getItem(MODE_KEY) === 'hirose';
 
-  const shiftIsoDate = (date, days) => {
+  const parseIsoDate = (date) => {
     const d = new Date(`${date}T12:00:00Z`);
-    if (!Number.isFinite(d.getTime())) return '';
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0, 10);
+    return Number.isFinite(d.getTime()) ? d : null;
   };
 
-  const creditDateForSource = (sourceDate) => shiftIsoDate(sourceDate, 1);
+  const isoFromDate = (d) => d.toISOString().slice(0, 10);
+
+  const isWeekendDate = (date) => {
+    const d = parseIsoDate(date);
+    if (!d) return false;
+    const day = d.getUTCDay();
+    return day === 0 || day === 6;
+  };
+
+  const nextBusinessDate = (sourceDate) => {
+    const d = parseIsoDate(sourceDate);
+    if (!d) return '';
+    d.setUTCDate(d.getUTCDate() + 1);
+    while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+    return isoFromDate(d);
+  };
+
+  const creditDateForSource = (sourceDate) => nextBusinessDate(sourceDate);
 
   const scaledValues = (row) => {
     if (!row) return null;
@@ -111,7 +126,9 @@
     portfolioSwap = historyPortfolioSwap;
     derivedDaily = historyDerivedDaily;
     document.documentElement.dataset.hiroseHistoryAccounting = '1';
+    // Keep the legacy marker for existing clients/tests; the explicit calendar marker carries the new rule.
     document.documentElement.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
+    document.documentElement.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
   };
 
   const bindControls = () => {
@@ -163,11 +180,15 @@
       if (!history.length || history[0].date !== '2026-07-01') {
         throw new Error(`Hirose history start is ${history[0]?.date || 'missing'}`);
       }
-      creditHistory = history.map((row) => ({
-        row,
-        sourceDate: row.date,
-        creditDate: creditDateForSource(row.date),
-      }));
+      // Hirose publishes business-date rows. Ignore any accidental weekend source row so it
+      // cannot collide with Friday when both would otherwise map to Monday.
+      creditHistory = history
+        .filter((row) => !isWeekendDate(row.date))
+        .map((row) => ({
+          row,
+          sourceDate: row.date,
+          creditDate: creditDateForSource(row.date),
+        }));
       historyByCreditDate = new Map(creditHistory.map((entry) => [entry.creditDate, entry]));
       window.__DTL_HIROSE_HISTORY__ = () => history.map((row) => ({ ...row }));
       window.__DTL_HIROSE_CREDIT_HISTORY__ = () => creditHistory.map((entry) => ({
@@ -181,10 +202,12 @@
       };
       window.__DTL_HIROSE_POSITION_SWAP__ = (position, date) => positionSwapFromHistory(position, date);
       window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__ = (position, date) => eligibleForCredit(position, date);
+      window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__ = (sourceDate) => creditDateForSource(sourceDate);
       root.dataset.hiroseHistoryReady = '1';
       root.dataset.hiroseHistoryStart = history[0].date;
       root.dataset.hiroseHistoryRecords = String(history.length);
       root.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
+      root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
       installHistoryAccounting();
       bindControls();
       try { renderAll(); } catch (_) {}
