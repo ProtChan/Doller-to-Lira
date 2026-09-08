@@ -11,32 +11,6 @@
   const rawMode = () => localStorage.getItem(RATE_SOURCE_KEY) || 'auto';
   const rateAt = (date) => historyByDate.get(date) || null;
 
-  const ensurePreparedOption = () => {
-    const select = $('settingRateSource');
-    if (!select) return;
-    if (!select.querySelector('option[value="prepared"]')) {
-      const option = document.createElement('option');
-      option.value = 'prepared';
-      option.textContent = 'こちらが用意したレート';
-      const saved = select.querySelector('option[value="saved"]');
-      if (saved) select.insertBefore(option, saved);
-      else select.appendChild(option);
-    }
-    if (rawMode() === 'prepared') select.value = 'prepared';
-    if (!select.dataset.preparedSourceBound) {
-      select.dataset.preparedSourceBound = '1';
-      select.addEventListener('change', (event) => {
-        if (select.value !== 'prepared') return;
-        event.stopImmediatePropagation();
-        localStorage.setItem(RATE_SOURCE_KEY, 'prepared');
-        root.dataset.rateSourceMode = 'prepared';
-        applyPreparedTo('daily', $('dailyDate')?.value || isoToday());
-        applyPreparedTo('quickDaily', $('quickDailyDate')?.value || isoToday());
-        toast('こちらが用意した過去レートを使います');
-      }, true);
-    }
-  };
-
   const noteFor = (prefix) => {
     const input = $(prefix + 'Rate');
     const label = input?.closest('label');
@@ -76,15 +50,60 @@
     return true;
   };
 
+  const applySelectedSource = (prefix, date) => {
+    if (rawMode() === 'prepared') return applyPreparedTo(prefix, date);
+    if (typeof window.__DTL_APPLY_RATE_SOURCE__ === 'function') {
+      return window.__DTL_APPLY_RATE_SOURCE__(prefix, date);
+    }
+    return false;
+  };
+
+  const ensurePreparedOption = () => {
+    const select = $('settingRateSource');
+    if (!select) return;
+    if (!select.querySelector('option[value="prepared"]')) {
+      const option = document.createElement('option');
+      option.value = 'prepared';
+      option.textContent = 'こちらが用意したレート';
+      const saved = select.querySelector('option[value="saved"]');
+      if (saved) select.insertBefore(option, saved);
+      else select.appendChild(option);
+    }
+    const mode = rawMode();
+    if (['auto', 'prepared', 'saved', 'hirose'].includes(mode)) select.value = mode;
+
+    if (!select.dataset.preparedSourceBound) {
+      select.dataset.preparedSourceBound = '1';
+      // Own the selector in capture phase. The older selector patch does not know
+      // about `prepared`, so handling all four modes here avoids stale mode state
+      // when the user switches away from the prepared source.
+      select.addEventListener('change', (event) => {
+        event.stopImmediatePropagation();
+        const next = ['auto', 'prepared', 'saved', 'hirose'].includes(select.value) ? select.value : 'auto';
+        localStorage.setItem(RATE_SOURCE_KEY, next);
+        root.dataset.rateSourceMode = next;
+        applySelectedSource('daily', $('dailyDate')?.value || isoToday());
+        applySelectedSource('quickDaily', $('quickDailyDate')?.value || isoToday());
+        const labels = {
+          auto: '保存済み過去レート優先に切り替えました',
+          prepared: 'こちらが用意した過去レートを使います',
+          saved: '過去の保存済みレートを使います',
+          hirose: 'ヒロセ23:00 ASKレートを使います'
+        };
+        toast(labels[next]);
+      }, true);
+    }
+  };
+
   const baseFillDailyFormPrepared = fillDailyForm;
   fillDailyForm = function(prefix, date = isoToday()) {
     baseFillDailyFormPrepared(prefix, date);
-    applyPreparedTo(prefix, date);
+    applySelectedSource(prefix, date);
   };
 
   ['daily', 'quickDaily'].forEach((prefix) => {
     const dateInput = $(prefix + 'Date');
-    const sync = () => setTimeout(() => applyPreparedTo(prefix, dateInput?.value), 0);
+    const sync = () => setTimeout(() => applySelectedSource(prefix, dateInput?.value), 0);
     dateInput?.addEventListener('input', sync);
     dateInput?.addEventListener('change', sync);
   });
@@ -114,8 +133,8 @@
       root.dataset.userPreparedRateRecords = String(history.length);
       root.dataset.userPreparedRateEnd = history.at(-1)?.date || '';
       ensurePreparedOption();
-      applyPreparedTo('daily', $('dailyDate')?.value || isoToday());
-      applyPreparedTo('quickDaily', $('quickDailyDate')?.value || isoToday());
+      applySelectedSource('daily', $('dailyDate')?.value || isoToday());
+      applySelectedSource('quickDaily', $('quickDailyDate')?.value || isoToday());
     })
     .catch((error) => {
       root.dataset.userPreparedRateReady = '0';
