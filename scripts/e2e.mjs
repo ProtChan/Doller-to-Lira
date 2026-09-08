@@ -23,6 +23,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.hiroseFeedReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryAccounting === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCreditRule === 'next-day-open-before-close-inclusive', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapAccounting === 'fractional-internal-truncated-display', { timeout: 15000 });
@@ -34,6 +35,7 @@ try {
   console.log('hiroseFeedReady=', await page.locator('html').getAttribute('data-hirose-feed-ready'));
   console.log('hiroseHistoryReady=', await page.locator('html').getAttribute('data-hirose-history-ready'));
   console.log('hiroseHistoryAccounting=', await page.locator('html').getAttribute('data-hirose-history-accounting'));
+  console.log('hiroseSwapCreditRule=', await page.locator('html').getAttribute('data-hirose-swap-credit-rule'));
   console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
   console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
   console.log('swapAccounting=', await page.locator('html').getAttribute('data-swap-accounting'));
@@ -102,22 +104,29 @@ try {
       start: document.documentElement.dataset.hiroseHistoryStart,
       records: Number(document.documentElement.dataset.hiroseHistoryRecords || 0),
       first: rows[0] || null,
-      july1to3Short: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-01', side: 'short', lots: 1 }, '2026-07-03')
+      july1to3Short: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-01', side: 'short', lots: 1 }, '2026-07-03'),
+      july1to3Closed: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-01', closeDate: '2026-07-03', side: 'short', lots: 1 }, '2026-07-03'),
+      openedJul3SameDay: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-03', side: 'short', lots: 1 }, '2026-07-03'),
+      sep4Credit: window.__DTL_HIROSE_CREDIT_AT__?.('2026-09-04') || null
     };
   });
   assert.equal(historyCheck.start, '2026-07-01', `Hirose history did not start on 2026-07-01: ${historyCheck.start}`);
   assert.ok(historyCheck.records >= 47, `Hirose history is unexpectedly short: ${historyCheck.records}`);
   assert.equal(historyCheck.first?.date, '2026-07-01', 'first Hirose historical row is missing');
   assert.equal(historyCheck.first?.sellJpy, 116.3, '2026-07-01 Hirose sell swap is wrong');
-  assert.ok(Math.abs(historyCheck.july1to3Short - 580) < 1e-9, `Hirose auto history did not accrue all July 1-3 rows at 1,000 units: ${historyCheck.july1to3Short}`);
-  console.log('Hirose history 2026-07-01 onward + multi-day accrual: PASS');
+  assert.ok(Math.abs(historyCheck.july1to3Short - 463.11) < 1e-9, `opening-day exclusion / next-day credit is wrong: ${historyCheck.july1to3Short}`);
+  assert.ok(Math.abs(historyCheck.july1to3Closed - 463.11) < 1e-9, `close-date-inclusive swap credit is wrong: ${historyCheck.july1to3Closed}`);
+  assert.equal(historyCheck.openedJul3SameDay, 0, `position opened on credit date must not receive same-day swap: ${historyCheck.openedJul3SameDay}`);
+  assert.equal(historyCheck.sep4Credit?.sourceDate, '2026-09-03', 'Sep 4 credit must come from Sep 3 Hirose row');
+  assert.equal(historyCheck.sep4Credit?.row?.sellJpy, 473.94, 'Sep 3 four-day swap must credit on Sep 4');
+  console.log('Hirose next-day credit + open-day exclusion + close-day inclusion: PASS');
 
   assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true, 'mobile backup button is not visible at phone viewport');
   await page.locator('#openBackupFromSettingsBtn').click();
   assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), false, 'settings drawer did not close when opening mobile backup');
   assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), true, 'backup dialog did not open from mobile settings');
   assert.equal(await page.locator('#exportJsonBtn').isVisible(), true, 'JSON backup action is not visible on mobile');
-  assert.equal(await page.locator('#exportCsvBtn').isVisible(), true, 'CSV backup action is not visible on mobile');
+  assert.equal(await page.locator('#exportCsvBtn').isVisible(), true, 'CSV backup is not visible on mobile');
   assert.equal(await page.locator('#importJsonInput').count(), 1, 'JSON restore input is missing on mobile');
   console.log('mobile backup access: PASS');
   await page.locator('#closeBackupBtn').click();
@@ -129,20 +138,27 @@ try {
   assert.equal(await page.locator('#dailyTryJpy').count(), 0, 'legacy TRY/JPY input is still visible in daily form');
   assert.equal(await page.locator('#dailySwap').getAttribute('step'), 'any', 'daily swap input is not arbitrary-decimal');
 
-  // Past official rows are available immediately in Hirose auto mode at the 1,000-unit default.
-  await page.locator('#dailyDate').fill('2026-07-01');
+  // Source-date rows are credited on the following calendar day.
+  await page.locator('#dailyDate').fill('2026-07-02');
   await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 116.3, '2026-07-01 Hirose history was not applied at the 1,000-unit default');
-  console.log('Hirose historical auto-fill 2026-07-01: PASS');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 116.3, '2026-07-01 Hirose row was not credited on 2026-07-02');
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-01表記 → 2026-07-02計上/, 'next-day source/credit note is missing');
+  console.log('Hirose historical next-day auto-fill: PASS');
 
-  // 2026-09-03 official sell swap is 473.94 JPY per 1,000 USD.
+  // Sep 3 receives Sep 2's 1-day row; Sep 3's 4-day row is received on Sep 4.
   await page.locator('#dailyDate').fill('2026-09-03');
   await page.locator('#dailyDate').dispatchEvent('change');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 118.26, 'Sep 3 must credit the Sep 2 Hirose row');
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-02表記 → 2026-09-03計上/, 'Sep 3 next-day note is wrong');
+
+  await page.locator('#dailyDate').fill('2026-09-04');
+  await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 473.94, 'Hirose auto swap was not kept on the 1,000-unit lot scale');
+  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 473.94, 'Sep 3 four-day Hirose swap must credit on Sep 4');
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-03表記 → 2026-09-04計上/, 'Sep 4 source/credit note is wrong');
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/, 'Hirose rollover day count is not shown');
-  console.log('Hirose USDTRY auto swap 473.94 / 1,000 units: PASS');
+  console.log('Hirose Sep 3 four-day swap -> Sep 4 credit: PASS');
 
   // Return to manual mode for fractional accounting / display truncation test.
   await page.locator('#openSettingsBtn').click();
