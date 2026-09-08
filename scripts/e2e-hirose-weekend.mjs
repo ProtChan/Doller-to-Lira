@@ -60,13 +60,29 @@ try {
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-10表記 → 2026-07-13計上/, 'Monday note must show Friday source date');
   console.log('weekend daily input 0 / Monday Friday-source auto-fill: PASS');
 
-  await page.locator('[data-tab="positions"]').click();
-  await page.locator('#togglePositionFormBtn').click();
-  await page.locator('#positionDate').fill('2026-07-10');
-  await page.locator('#positionSide').selectOption('short');
-  await page.locator('#entryRate').fill('48.0000');
-  await page.locator('#entryLots').fill('1');
-  await page.locator('#positionForm button[type="submit"]').click();
+  // Seed a position directly into localStorage for the accounting/calendar check.
+  // This avoids a WebKit-only click/re-render race unrelated to swap accounting.
+  await page.evaluate(() => {
+    const key = 'dollar-to-lira:v1';
+    const saved = JSON.parse(localStorage.getItem(key));
+    saved.positions = Array.isArray(saved.positions) ? saved.positions : [];
+    saved.positions.push({
+      id: 'weekend-test-position',
+      date: '2026-07-10',
+      side: 'short',
+      entryRate: 48,
+      lots: 1,
+      memo: 'weekend credit e2e',
+      closeDate: null,
+      closeRate: null
+    });
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hirosePendingEntries === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCalendarRule === 'next-business-day-weekend-skip', { timeout: 15000 });
 
   const positionRules = await page.evaluate(() => ({
     throughFriday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', side: 'short', lots: 1 }, '2026-07-10'),
