@@ -5,11 +5,46 @@
 
   const RATE_SOURCE_KEY = 'dollar-to-lira:rate-source:v1';
   const FEED_URL = './data/user-prepared-rates.json?v=20260909-0303';
+  const MODES = new Set(['auto', 'prepared', 'saved', 'hirose']);
   let history = [];
   let historyByDate = new Map();
 
-  const rawMode = () => localStorage.getItem(RATE_SOURCE_KEY) || 'auto';
+  const rawMode = () => {
+    const value = localStorage.getItem(RATE_SOURCE_KEY) || 'auto';
+    return MODES.has(value) ? value : 'auto';
+  };
   const rateAt = (date) => historyByDate.get(date) || null;
+
+  const exactDaily = (date) => state.daily.find((row) => row?.date === date) || null;
+  const savedRateAt = (date) => {
+    const row = exactDaily(date);
+    // Rows automatically imported from Hirose are not user-saved historical rates.
+    if (!row || row.rateSource === 'hirose-ask-23close') return null;
+    const rate = Number(row.rate);
+    const usdJpy = usdJpyValueV2(row);
+    if (!(rate > 0) || !(usdJpy > 0)) return null;
+    return { date, rate, usdJpy, source: 'saved', row };
+  };
+  const hiroseRateAt = (date) => {
+    try {
+      const row = typeof window.__DTL_HIROSE_RATE_AT__ === 'function'
+        ? window.__DTL_HIROSE_RATE_AT__(date)
+        : null;
+      const rate = Number(row?.usdTryAskClose23);
+      const usdJpy = Number(row?.usdJpyAskClose23);
+      if (!(rate > 0) || !(usdJpy > 0)) return null;
+      return { date, rate, usdJpy, source: 'hirose', row };
+    } catch (_) {
+      return null;
+    }
+  };
+  const preparedRateAt = (date) => {
+    const row = rateAt(date);
+    const rate = Number(row?.usdTry);
+    const usdJpy = Number(row?.usdJpy);
+    if (!(rate > 0) || !(usdJpy > 0)) return null;
+    return { date, rate, usdJpy, source: 'prepared', row };
+  };
 
   const noteFor = (prefix) => {
     const input = $(prefix + 'Rate');
@@ -24,38 +59,73 @@
     return note;
   };
 
-  const applyPreparedTo = (prefix, date) => {
-    if (rawMode() !== 'prepared') return false;
-    const rateInput = $(prefix + 'Rate');
-    const usdJpyInput = $(prefix + 'UsdJpy');
-    if (!rateInput || !usdJpyInput || !date) return false;
-    const note = noteFor(prefix);
-    const row = rateAt(date);
-
+  const clearSourceMarkers = (rateInput, usdJpyInput) => {
     delete rateInput.dataset.rateSource;
     delete usdJpyInput.dataset.rateSource;
+    delete rateInput.dataset.hiroseAskClose23;
+    delete usdJpyInput.dataset.hiroseAskClose23;
+  };
 
-    if (!row) {
-      rateInput.value = '';
-      usdJpyInput.value = '';
-      if (note) note.textContent = `${date} の用意済みレートなし · 手入力可`;
-      return false;
-    }
-
-    rateInput.value = Number(row.usdTry).toFixed(4);
-    usdJpyInput.value = Number(row.usdJpy).toFixed(3);
-    rateInput.dataset.rateSource = 'prepared';
-    usdJpyInput.dataset.rateSource = 'prepared';
-    if (note) note.textContent = `${date} · 用意済みレート USD/TRY ${Number(row.usdTry).toFixed(4)} · USD/JPY ${Number(row.usdJpy).toFixed(3)}`;
-    return true;
+  const sourceFor = (mode, date) => {
+    if (mode === 'prepared') return preparedRateAt(date);
+    if (mode === 'saved') return savedRateAt(date);
+    if (mode === 'hirose') return hiroseRateAt(date);
+    // Auto keeps the original behavior: a user-saved row is authoritative;
+    // otherwise use the Hirose historical 23:00 ASK close when available.
+    return savedRateAt(date) || hiroseRateAt(date);
   };
 
   const applySelectedSource = (prefix, date) => {
-    if (rawMode() === 'prepared') return applyPreparedTo(prefix, date);
-    if (typeof window.__DTL_APPLY_RATE_SOURCE__ === 'function') {
-      return window.__DTL_APPLY_RATE_SOURCE__(prefix, date);
+    const rateInput = $(prefix + 'Rate');
+    const usdJpyInput = $(prefix + 'UsdJpy');
+    if (!rateInput || !usdJpyInput || !date) return false;
+
+    const mode = rawMode();
+    const note = noteFor(prefix);
+    const source = sourceFor(mode, date);
+    clearSourceMarkers(rateInput, usdJpyInput);
+
+    if (!source) {
+      // Explicit source modes should not silently retain a different date/source.
+      if (mode !== 'auto') {
+        rateInput.value = '';
+        usdJpyInput.value = '';
+      }
+      if (note) {
+        note.textContent = mode === 'prepared'
+          ? `${date} の用意済みレートなし · 手入力可`
+          : mode === 'saved'
+            ? `${date} の保存済み過去レートなし · 手入力可`
+            : mode === 'hirose'
+              ? `${date} のヒロセ23:00 ASKレートなし · 手入力可`
+              : '保存済み過去レートを優先し、なければヒロセ23:00 ASK';
+      }
+      return false;
     }
-    return false;
+
+    rateInput.value = source.source === 'prepared'
+      ? Number(source.rate).toFixed(4)
+      : String(Number(source.rate));
+    usdJpyInput.value = source.source === 'prepared'
+      ? Number(source.usdJpy).toFixed(3)
+      : String(Number(Number(source.usdJpy).toFixed(3)));
+    rateInput.dataset.rateSource = source.source;
+    usdJpyInput.dataset.rateSource = source.source;
+    if (source.source === 'hirose') {
+      rateInput.dataset.hiroseAskClose23 = '1';
+      usdJpyInput.dataset.hiroseAskClose23 = '1';
+    }
+
+    if (note) {
+      if (source.source === 'prepared') {
+        note.textContent = `${date} · 用意済みレート USD/TRY ${Number(source.rate).toFixed(4)} · USD/JPY ${Number(source.usdJpy).toFixed(3)}`;
+      } else if (source.source === 'saved') {
+        note.textContent = `${date} · 過去の保存済みレートを使用`;
+      } else {
+        note.textContent = `${date} · ヒロセ 60分足 23:00 ASK終値を使用`;
+      }
+    }
+    return true;
   };
 
   const ensurePreparedOption = () => {
@@ -69,17 +139,15 @@
       if (saved) select.insertBefore(option, saved);
       else select.appendChild(option);
     }
-    const mode = rawMode();
-    if (['auto', 'prepared', 'saved', 'hirose'].includes(mode)) select.value = mode;
+    select.value = rawMode();
 
     if (!select.dataset.preparedSourceBound) {
       select.dataset.preparedSourceBound = '1';
-      // Own the selector in capture phase. The older selector patch does not know
-      // about `prepared`, so handling all four modes here avoids stale mode state
-      // when the user switches away from the prepared source.
+      // Own the selector in capture phase. The older selector layer predates the
+      // `prepared` mode, so this keeps all four modes deterministic.
       select.addEventListener('change', (event) => {
         event.stopImmediatePropagation();
-        const next = ['auto', 'prepared', 'saved', 'hirose'].includes(select.value) ? select.value : 'auto';
+        const next = MODES.has(select.value) ? select.value : 'auto';
         localStorage.setItem(RATE_SOURCE_KEY, next);
         root.dataset.rateSourceMode = next;
         applySelectedSource('daily', $('dailyDate')?.value || isoToday());
@@ -95,6 +163,8 @@
     }
   };
 
+  // Install last, after the legacy Hirose/rate-source wrappers. This guarantees
+  // that the currently selected source wins after any older fill logic runs.
   const baseFillDailyFormPrepared = fillDailyForm;
   fillDailyForm = function(prefix, date = isoToday()) {
     baseFillDailyFormPrepared(prefix, date);
@@ -129,6 +199,7 @@
         const row = rateAt(date);
         return row ? { ...row } : null;
       };
+      window.__DTL_APPLY_SELECTED_RATE_SOURCE__ = (prefix, date) => applySelectedSource(prefix, date);
       root.dataset.userPreparedRateReady = '1';
       root.dataset.userPreparedRateRecords = String(history.length);
       root.dataset.userPreparedRateEnd = history.at(-1)?.date || '';
@@ -142,5 +213,6 @@
       console.warn('user-prepared rate history load failed', error);
     });
 
+  root.dataset.rateSourceMode = rawMode();
   root.dataset.userPreparedRates = '1';
 })();
