@@ -30,8 +30,10 @@ jobs:
           node --check patch-hirose-pending-bootstrap-20260907.js
           node --check patch-hirose-rate-history-20260907.js
           node --check patch-close-conversion-20260908.js
+          node --check patch-capital-history-20260908.js
           node --check scripts/e2e-hirose-rates.mjs
           node --check scripts/e2e-close-conversion.mjs
+          node --check scripts/e2e-capital-history.mjs
       - name: Runtime smoke test
         run: node smoke-runtime.js
       - name: Install browser test runtimes
@@ -47,6 +49,7 @@ jobs:
           BROWSER=chromium node scripts/e2e-hirose-pending.mjs
           BROWSER=chromium node scripts/e2e-hirose-rates.mjs
           BROWSER=chromium node scripts/e2e-close-conversion.mjs
+          BROWSER=chromium node scripts/e2e-capital-history.mjs
       - name: Real WebKit DOM interaction test (local build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http-webkit.log 2>&1 &
@@ -56,6 +59,7 @@ jobs:
           BROWSER=webkit node scripts/e2e-hirose-pending.mjs
           BROWSER=webkit node scripts/e2e-hirose-rates.mjs
           BROWSER=webkit node scripts/e2e-close-conversion.mjs
+          BROWSER=webkit node scripts/e2e-capital-history.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
@@ -76,6 +80,7 @@ jobs:
           node scripts/e2e-hirose-pending.mjs
           node scripts/e2e-hirose-rates.mjs
           node scripts/e2e-close-conversion.mjs
+          node scripts/e2e-capital-history.mjs
       - name: Real WebKit DOM interaction test (deployed Pages)
         env:
           TEST_URL: ${{ steps.deployment.outputs.page_url }}
@@ -85,3 +90,4 @@ jobs:
           node scripts/e2e-hirose-pending.mjs
           node scripts/e2e-hirose-rates.mjs
           node scripts/e2e-close-conversion.mjs
+          node scripts/e2e-capital-history.mjs
