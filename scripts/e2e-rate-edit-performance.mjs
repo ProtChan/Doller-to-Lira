@@ -17,6 +17,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.rateEditPerformance === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.userPreparedRateReady === '1', { timeout: 15000 });
   console.log('startup appReady ms=', Date.now() - started);
 
   const markers = await page.evaluate(() => ({
@@ -25,23 +26,38 @@ try {
     editing: document.documentElement.dataset.positionEditing,
     cache: document.documentElement.dataset.performanceCache,
     derivedCache: document.documentElement.dataset.derivedCache,
-    fastLc: document.documentElement.dataset.fastLc
+    fastLc: document.documentElement.dataset.fastLc,
+    prepared: document.documentElement.dataset.userPreparedRateReady
   }));
-  assert.equal(markers.runtime, '20260908-1815');
+  assert.equal(markers.runtime, '20260909-0303');
   assert.equal(markers.rateChoice, '1');
   assert.equal(markers.editing, '1');
   assert.equal(markers.cache, '1');
   assert.equal(markers.derivedCache, '1');
   assert.equal(markers.fastLc, '1');
+  assert.equal(markers.prepared, '1');
 
-  // Explicit historical-rate source choice.
+  // Explicit historical-rate source choices.
   await page.locator('#openSettingsBtn').click();
   const options = await page.locator('#settingRateSource option').allTextContents();
-  assert.deepEqual(options, ['保存済み優先 → ヒロセ', '過去の保存済みレート', 'ヒロセ 23:00 ASK']);
-  await page.locator('#settingRateSource').selectOption('saved');
+  assert.deepEqual(options, ['保存済み優先 → ヒロセ', 'こちらが用意したレート', '過去の保存済みレート', 'ヒロセ 23:00 ASK']);
+  await page.locator('#settingRateSource').selectOption('prepared');
   await page.locator('#closeSettingsBtn').click();
 
   await page.locator('[data-tab="daily"]').click();
+  await page.locator('#dailyDate').fill('2026-09-08');
+  await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(() => document.querySelector('#dailyRate')?.dataset.rateSource === 'prepared');
+  assert.equal(await page.locator('#dailyRate').inputValue(), '48.4610');
+  assert.equal(await page.locator('#dailyUsdJpy').inputValue(), '154.005');
+  const prepared = await page.evaluate(() => window.__DTL_USER_PREPARED_RATE_AT__?.('2026-09-08') || null);
+  assert.deepEqual(prepared, { date: '2026-09-08', usdTry: 48.461, usdJpy: 154.005 });
+  console.log('user-prepared Sep 8 rate source: PASS');
+
+  await page.locator('#openSettingsBtn').click();
+  await page.locator('#settingRateSource').selectOption('saved');
+  await page.locator('#closeSettingsBtn').click();
+
   await page.locator('#dailyDate').fill('2026-06-30');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.locator('#dailyRate').fill('47.1234');
