@@ -60,7 +60,7 @@
           labels:d.map((x) => x.date.slice(5)),
           datasets:[
             {label:'23:00 ASK Close',data:d.map((x) => x.rate),borderColor:'#f2f5f8',borderWidth:2,pointRadius:0,tension:.15},
-            {label:'日中最大ASK',data:worst,borderColor:'#ffd166',backgroundColor:'rgba(255,209,102,.08)',borderWidth:1.9,pointRadius:3,pointHoverRadius:5,spanGaps:false,tension:.12},
+            {label:'日中最大ASK',data:worst,borderColor:'#ffd166',backgroundColor:'rgba(255,209,102,.08)',borderWidth:1.9,pointRadius:0,pointHoverRadius:4,spanGaps:false,tension:.12},
             {label:'推定LC',data:d.map((x) => x.lc),borderColor:'#ff7582',borderDash:[5,5],borderWidth:1.6,pointRadius:0,spanGaps:true}
           ]
         },
@@ -78,7 +78,7 @@
         type:'line',
         data:{labels:d.map((x)=>x.date.slice(5)),datasets:[
           {label:'23:00 維持率',data:d.map((x)=>Number.isFinite(x.maintenance)?x.maintenance:null),borderColor:'#7ee787',backgroundColor:'rgba(126,231,135,.05)',borderWidth:2.1,pointRadius:0,fill:true},
-          {label:'日中最大ASK時 維持率',data:d.map((x)=>worstMaintenanceAt(x.date, x)),borderColor:'#ffd166',borderWidth:1.9,pointRadius:3,pointHoverRadius:5,spanGaps:false,tension:.12},
+          {label:'日中最大ASK時 維持率',data:d.map((x)=>worstMaintenanceAt(x.date, x)),borderColor:'#ffd166',borderWidth:1.9,pointRadius:0,pointHoverRadius:4,spanGaps:false,tension:.12},
           {label:`LC ${state.settings.lcThreshold}%`,data:d.map(()=>Number(state.settings.lcThreshold)),borderColor:'#ff7582',borderDash:[5,5],borderWidth:1.4,pointRadius:0}
         ]},
         options:base
