@@ -14,8 +14,16 @@
   };
 
   const worstAskAt = (date) => {
-    const value = Number(publishedRateAt(date)?.usdTryAskDayHigh);
-    return value > 0 ? value : null;
+    const published = Number(publishedRateAt(date)?.usdTryAskDayHigh);
+    if (published > 0) return published;
+    // Older/reference rows can have their day-high in the supplemental high feed
+    // rather than the 23:00 close row. The risk chart must use the combined source.
+    try {
+      const supplemental = Number(window.__DTL_ASK_DAY_HIGH_AT__?.(date)?.usdTryAskDayHigh);
+      return supplemental > 0 ? supplemental : null;
+    } catch (_) {
+      return null;
+    }
   };
 
   const worstMaintenanceAt = (date, dailyRow = null) => {
