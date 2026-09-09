@@ -10,48 +10,224 @@
   "historyEnd": "2026-09-08",
   "records": 43,
   "history": [
-    {"date":"2026-07-10","usdTryAskClose23":46.9859,"usdJpyAskClose23":161.83},
-    {"date":"2026-07-13","usdTryAskClose23":47.0032,"usdJpyAskClose23":162.35},
-    {"date":"2026-07-14","usdTryAskClose23":47.039,"usdJpyAskClose23":161.971},
-    {"date":"2026-07-15","usdTryAskClose23":47.0288,"usdJpyAskClose23":162.143},
-    {"date":"2026-07-16","usdTryAskClose23":47.0571,"usdJpyAskClose23":162.445},
-    {"date":"2026-07-17","usdTryAskClose23":47.167,"usdJpyAskClose23":162.408},
-    {"date":"2026-07-20","usdTryAskClose23":47.1842,"usdJpyAskClose23":162.525},
-    {"date":"2026-07-21","usdTryAskClose23":47.2013,"usdJpyAskClose23":163.019},
-    {"date":"2026-07-22","usdTryAskClose23":47.2171,"usdJpyAskClose23":163.117},
-    {"date":"2026-07-23","usdTryAskClose23":47.2373,"usdJpyAskClose23":163.923},
-    {"date":"2026-07-24","usdTryAskClose23":47.3475,"usdJpyAskClose23":163.759},
-    {"date":"2026-07-27","usdTryAskClose23":47.351,"usdJpyAskClose23":163.711},
-    {"date":"2026-07-28","usdTryAskClose23":47.3808,"usdJpyAskClose23":163.868},
-    {"date":"2026-07-29","usdTryAskClose23":47.3989,"usdJpyAskClose23":163.889},
-    {"date":"2026-07-30","usdTryAskClose23":47.4162,"usdJpyAskClose23":159.285},
-    {"date":"2026-07-31","usdTryAskClose23":47.5257,"usdJpyAskClose23":159.244},
-    {"date":"2026-08-03","usdTryAskClose23":47.5362,"usdJpyAskClose23":156.563},
-    {"date":"2026-08-04","usdTryAskClose23":47.5497,"usdJpyAskClose23":157.563},
-    {"date":"2026-08-05","usdTryAskClose23":47.5765,"usdJpyAskClose23":157.5},
-    {"date":"2026-08-06","usdTryAskClose23":47.5965,"usdJpyAskClose23":158.207},
-    {"date":"2026-08-07","usdTryAskClose23":47.7062,"usdJpyAskClose23":157.928},
-    {"date":"2026-08-10","usdTryAskClose23":47.7128,"usdJpyAskClose23":158.938},
-    {"date":"2026-08-11","usdTryAskClose23":47.7417,"usdJpyAskClose23":159.235},
-    {"date":"2026-08-12","usdTryAskClose23":47.7589,"usdJpyAskClose23":159.204},
-    {"date":"2026-08-13","usdTryAskClose23":47.7761,"usdJpyAskClose23":159.17},
-    {"date":"2026-08-14","usdTryAskClose23":47.8861,"usdJpyAskClose23":159.031},
-    {"date":"2026-08-17","usdTryAskClose23":47.9042,"usdJpyAskClose23":159.289},
-    {"date":"2026-08-18","usdTryAskClose23":47.9225,"usdJpyAskClose23":159.555},
-    {"date":"2026-08-19","usdTryAskClose23":47.9389,"usdJpyAskClose23":158.348},
-    {"date":"2026-08-20","usdTryAskClose23":47.9565,"usdJpyAskClose23":158.728},
-    {"date":"2026-08-21","usdTryAskClose23":48.0663,"usdJpyAskClose23":158.957},
-    {"date":"2026-08-24","usdTryAskClose23":48.0825,"usdJpyAskClose23":159.201},
-    {"date":"2026-08-25","usdTryAskClose23":48.1007,"usdJpyAskClose23":159.252},
-    {"date":"2026-08-26","usdTryAskClose23":48.1192,"usdJpyAskClose23":159.41},
-    {"date":"2026-08-27","usdTryAskClose23":48.1364,"usdJpyAskClose23":159.332},
-    {"date":"2026-08-28","usdTryAskClose23":48.2478,"usdJpyAskClose23":159.874},
-    {"date":"2026-08-31","usdTryAskClose23":48.2547,"usdJpyAskClose23":159.71},
-    {"date":"2026-09-01","usdTryAskClose23":48.2772,"usdJpyAskClose23":160.077},
-    {"date":"2026-09-02","usdTryAskClose23":48.2982,"usdJpyAskClose23":158.744},
-    {"date":"2026-09-03","usdTryAskClose23":48.3153,"usdJpyAskClose23":155.422},
-    {"date":"2026-09-04","usdTryAskClose23":48.4438,"usdJpyAskClose23":156.12},
-    {"date":"2026-09-07","usdTryAskClose23":48.4351,"usdJpyAskClose23":154.289},
-    {"date":"2026-09-08","usdTryAskClose23":48.461,"usdJpyAskClose23":154.005,"verification":"owner-manual"}
-  ]
+    {
+      "date": "2026-07-10",
+      "usdTryAskClose23": 46.9859,
+      "usdJpyAskClose23": 161.83
+    },
+    {
+      "date": "2026-07-13",
+      "usdTryAskClose23": 47.0032,
+      "usdJpyAskClose23": 162.35
+    },
+    {
+      "date": "2026-07-14",
+      "usdTryAskClose23": 47.039,
+      "usdJpyAskClose23": 161.971
+    },
+    {
+      "date": "2026-07-15",
+      "usdTryAskClose23": 47.0288,
+      "usdJpyAskClose23": 162.143
+    },
+    {
+      "date": "2026-07-16",
+      "usdTryAskClose23": 47.0571,
+      "usdJpyAskClose23": 162.445
+    },
+    {
+      "date": "2026-07-17",
+      "usdTryAskClose23": 47.167,
+      "usdJpyAskClose23": 162.408
+    },
+    {
+      "date": "2026-07-20",
+      "usdTryAskClose23": 47.1842,
+      "usdJpyAskClose23": 162.525
+    },
+    {
+      "date": "2026-07-21",
+      "usdTryAskClose23": 47.2013,
+      "usdJpyAskClose23": 163.019
+    },
+    {
+      "date": "2026-07-22",
+      "usdTryAskClose23": 47.2171,
+      "usdJpyAskClose23": 163.117
+    },
+    {
+      "date": "2026-07-23",
+      "usdTryAskClose23": 47.2373,
+      "usdJpyAskClose23": 163.923
+    },
+    {
+      "date": "2026-07-24",
+      "usdTryAskClose23": 47.3475,
+      "usdJpyAskClose23": 163.759
+    },
+    {
+      "date": "2026-07-27",
+      "usdTryAskClose23": 47.351,
+      "usdJpyAskClose23": 163.711
+    },
+    {
+      "date": "2026-07-28",
+      "usdTryAskClose23": 47.3808,
+      "usdJpyAskClose23": 163.868
+    },
+    {
+      "date": "2026-07-29",
+      "usdTryAskClose23": 47.3989,
+      "usdJpyAskClose23": 163.889
+    },
+    {
+      "date": "2026-07-30",
+      "usdTryAskClose23": 47.4162,
+      "usdJpyAskClose23": 159.285
+    },
+    {
+      "date": "2026-07-31",
+      "usdTryAskClose23": 47.5257,
+      "usdJpyAskClose23": 159.244
+    },
+    {
+      "date": "2026-08-03",
+      "usdTryAskClose23": 47.5362,
+      "usdJpyAskClose23": 156.563
+    },
+    {
+      "date": "2026-08-04",
+      "usdTryAskClose23": 47.5497,
+      "usdJpyAskClose23": 157.563
+    },
+    {
+      "date": "2026-08-05",
+      "usdTryAskClose23": 47.5765,
+      "usdJpyAskClose23": 157.5
+    },
+    {
+      "date": "2026-08-06",
+      "usdTryAskClose23": 47.5965,
+      "usdJpyAskClose23": 158.207
+    },
+    {
+      "date": "2026-08-07",
+      "usdTryAskClose23": 47.7062,
+      "usdJpyAskClose23": 157.928
+    },
+    {
+      "date": "2026-08-10",
+      "usdTryAskClose23": 47.7128,
+      "usdJpyAskClose23": 158.938
+    },
+    {
+      "date": "2026-08-11",
+      "usdTryAskClose23": 47.7417,
+      "usdJpyAskClose23": 159.235
+    },
+    {
+      "date": "2026-08-12",
+      "usdTryAskClose23": 47.7589,
+      "usdJpyAskClose23": 159.204
+    },
+    {
+      "date": "2026-08-13",
+      "usdTryAskClose23": 47.7761,
+      "usdJpyAskClose23": 159.17
+    },
+    {
+      "date": "2026-08-14",
+      "usdTryAskClose23": 47.8861,
+      "usdJpyAskClose23": 159.031
+    },
+    {
+      "date": "2026-08-17",
+      "usdTryAskClose23": 47.9042,
+      "usdJpyAskClose23": 159.289
+    },
+    {
+      "date": "2026-08-18",
+      "usdTryAskClose23": 47.9225,
+      "usdJpyAskClose23": 159.555
+    },
+    {
+      "date": "2026-08-19",
+      "usdTryAskClose23": 47.9389,
+      "usdJpyAskClose23": 158.348
+    },
+    {
+      "date": "2026-08-20",
+      "usdTryAskClose23": 47.9565,
+      "usdJpyAskClose23": 158.728
+    },
+    {
+      "date": "2026-08-21",
+      "usdTryAskClose23": 48.0663,
+      "usdJpyAskClose23": 158.957
+    },
+    {
+      "date": "2026-08-24",
+      "usdTryAskClose23": 48.0825,
+      "usdJpyAskClose23": 159.201
+    },
+    {
+      "date": "2026-08-25",
+      "usdTryAskClose23": 48.1007,
+      "usdJpyAskClose23": 159.252
+    },
+    {
+      "date": "2026-08-26",
+      "usdTryAskClose23": 48.1192,
+      "usdJpyAskClose23": 159.41
+    },
+    {
+      "date": "2026-08-27",
+      "usdTryAskClose23": 48.1364,
+      "usdJpyAskClose23": 159.332
+    },
+    {
+      "date": "2026-08-28",
+      "usdTryAskClose23": 48.2478,
+      "usdJpyAskClose23": 159.874
+    },
+    {
+      "date": "2026-08-31",
+      "usdTryAskClose23": 48.2547,
+      "usdJpyAskClose23": 159.71
+    },
+    {
+      "date": "2026-09-01",
+      "usdTryAskClose23": 48.2772,
+      "usdJpyAskClose23": 160.077
+    },
+    {
+      "date": "2026-09-02",
+      "usdTryAskClose23": 48.2982,
+      "usdJpyAskClose23": 158.744
+    },
+    {
+      "date": "2026-09-03",
+      "usdTryAskClose23": 48.3153,
+      "usdJpyAskClose23": 155.422
+    },
+    {
+      "date": "2026-09-04",
+      "usdTryAskClose23": 48.4438,
+      "usdJpyAskClose23": 156.12
+    },
+    {
+      "date": "2026-09-07",
+      "usdTryAskClose23": 48.4351,
+      "usdJpyAskClose23": 154.289
+    },
+    {
+      "date": "2026-09-08",
+      "usdTryAskClose23": 48.461,
+      "usdJpyAskClose23": 154.005,
+      "verification": "owner-manual",
+      "usdTryAskDayHigh": 48.553,
+      "publishedAt": "2026-09-09T10:12:12Z"
+    }
+  ],
+  "lastManualPublication": "2026-09-09T10:12:12Z"
 }
