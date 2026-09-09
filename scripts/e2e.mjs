@@ -138,7 +138,6 @@ try {
   assert.equal(await page.locator('#dailyTryJpy').count(), 0, 'legacy TRY/JPY input is still visible in daily form');
   assert.equal(await page.locator('#dailySwap').getAttribute('step'), 'any', 'daily swap input is not arbitrary-decimal');
 
-  // Source-date rows are credited on the following calendar day.
   await page.locator('#dailyDate').fill('2026-07-02');
   await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
@@ -146,7 +145,6 @@ try {
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-01表記 → 2026-07-02計上/, 'next-day source/credit note is missing');
   console.log('Hirose historical next-day auto-fill: PASS');
 
-  // Sep 3 receives Sep 2's 1-day row; Sep 3's 4-day row is received on Sep 4.
   await page.locator('#dailyDate').fill('2026-09-03');
   await page.locator('#dailyDate').dispatchEvent('change');
   assert.equal(Number(await page.locator('#dailySwap').inputValue()), 118.26, 'Sep 3 must credit the Sep 2 Hirose row');
@@ -160,14 +158,14 @@ try {
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/, 'Hirose rollover day count is not shown');
   console.log('Hirose Sep 3 four-day swap -> Sep 4 credit: PASS');
 
-  // Return to manual mode for fractional accounting / display truncation test.
+  // Synthetic accounting fixtures are explicitly manual for both rates and swap.
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('manual');
+  await page.locator('#settingRateSource').selectOption('manual');
   await page.locator('#closeSettingsBtn').click();
   assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'manual', 'manual swap mode was not restored');
+  assert.equal(await page.locator('html').getAttribute('data-rate-source-mode'), 'manual', 'manual rate mode was not restored');
 
-  // Keep the synthetic manual-accounting fixture after the latest published reference date.
-  // This prevents a newly published reference row from becoming the latest snapshot under test.
   await page.locator('#dailyDate').fill('2026-09-10');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(25);
@@ -206,7 +204,6 @@ try {
   console.log('swap 100.78901 x 1.23 -> internal 123.9704823 / display ¥123: PASS');
   console.log('margin 6400/1000 x 1230 units -> 7872 yen: PASS');
 
-  // Add a second synthetic day with an FX move.
   await page.locator('#dailyDate').fill('2026-09-11');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(25);
@@ -231,14 +228,14 @@ try {
 
   const mobileCalendarCheck = await page.evaluate(() => {
     const days = [...document.querySelectorAll('#calendarGrid .calendar-day')];
-    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '11');
+    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '10');
     return target ? {
       text: target.innerText,
       main: target.querySelector('.calendar-pnl')?.textContent || '',
       sub: target.querySelector('.calendar-sub')?.textContent || ''
     } : null;
   });
-  assert.ok(mobileCalendarCheck, 'mobile calendar did not render Sep 11');
+  assert.ok(mobileCalendarCheck, 'mobile calendar did not render Sep 10');
   assert.ok(!/NET/.test(mobileCalendarCheck.text), `mobile NET label was not removed: ${mobileCalendarCheck.text}`);
   assert.match(mobileCalendarCheck.main, /¥/, `mobile main calendar value missing: ${mobileCalendarCheck.main}`);
   console.log('Sunday-first calendar + phone compact rendering: PASS');
@@ -247,7 +244,7 @@ try {
   await page.waitForTimeout(50);
   const desktopCalendarCheck = await page.evaluate(() => {
     const days = [...document.querySelectorAll('#calendarGrid .calendar-day')];
-    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '11');
+    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '10');
     return target ? target.innerText : '';
   });
   assert.match(desktopCalendarCheck, /FX/, `desktop calendar should retain FX label: ${desktopCalendarCheck}`);
