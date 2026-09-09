@@ -27,13 +27,15 @@ try {
     sep4: window.__DTL_HIROSE_RATE_AT__?.('2026-09-04') || null,
     sep7: window.__DTL_HIROSE_RATE_AT__?.('2026-09-07') || null,
     sep8: window.__DTL_HIROSE_RATE_AT__?.('2026-09-08') || null,
+    sep9: window.__DTL_HIROSE_RATE_AT__?.('2026-09-09') || null,
     storedJul1: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === '2026-07-01') || null,
-    storedSep8: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === '2026-09-08') || null
+    storedSep8: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === '2026-09-08') || null,
+    storedSep9: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === '2026-09-09') || null
   }));
 
   assert.equal(history.start, '2026-07-01', `unexpected rate history start: ${history.start}`);
-  assert.equal(history.end, '2026-09-08', `unexpected rate history end: ${history.end}`);
-  assert.equal(history.records, 50, `unexpected rate history record count: ${history.records}`);
+  assert.equal(history.end, '2026-09-09', `unexpected rate history end: ${history.end}`);
+  assert.equal(history.records, 51, `unexpected rate history record count: ${history.records}`);
   assert.equal(history.backfill4h, 8, `unexpected 4h backfill rows: ${history.backfill4h}`);
   assert.equal(history.jul1?.usdTryAskClose23, 46.6672, '2026-07-01 USDTRY 20:00 4h ASK close is wrong');
   assert.equal(history.jul1?.usdJpyAskClose23, 162.398, '2026-07-01 USDJPY 20:00 4h ASK close is wrong');
@@ -48,6 +50,9 @@ try {
   assert.equal(history.sep7?.usdJpyAskClose23, 154.289, '2026-09-07 USDJPY 23:00 ASK close is wrong');
   assert.equal(history.sep8?.usdTryAskClose23, 48.461, '2026-09-08 USDTRY 23:00 ASK close is wrong');
   assert.equal(history.sep8?.usdJpyAskClose23, 154.005, '2026-09-08 USDJPY 23:00 ASK close is wrong');
+  assert.equal(history.sep9?.usdTryAskClose23, 48.4787, '2026-09-09 USDTRY 23:00 ASK close is wrong');
+  assert.equal(history.sep9?.usdJpyAskClose23, 153.21, '2026-09-09 USDJPY 23:00 ASK close is wrong');
+  assert.equal(history.sep9?.usdTryAskDayHigh, 48.5472, '2026-09-09 USDTRY day high is wrong');
   assert.equal(history.storedJul1?.rate, 46.6672, '2026-07-01 historical USDTRY row was not backfilled');
   assert.equal(history.storedJul1?.usdJpy, 162.398, '2026-07-01 historical USDJPY row was not backfilled');
   assert.equal(history.storedJul1?.rateSourceTimeframe, '4h', '2026-07-01 stored source timeframe is wrong');
@@ -56,7 +61,9 @@ try {
   assert.equal(history.storedSep8?.rate, 48.461, '2026-09-08 historical USDTRY row was not backfilled');
   assert.equal(history.storedSep8?.usdJpy, 154.005, '2026-09-08 historical USDJPY row was not backfilled');
   assert.equal(history.storedSep8?.rateSource, 'hirose-ask-23close', 'historical row source marker is missing');
-  console.log('50 Hirose ASK end-of-day rows from Jul 1 through Sep 8 + 4h backfill: PASS');
+  assert.equal(history.storedSep9?.rate, 48.4787, '2026-09-09 historical USDTRY row was not backfilled');
+  assert.equal(history.storedSep9?.usdJpy, 153.21, '2026-09-09 historical USDJPY row was not backfilled');
+  console.log('51 Hirose ASK end-of-day rows from Jul 1 through Sep 9 + 4h backfill: PASS');
 
   await page.locator('[data-tab="daily"]').click();
   await page.locator('#dailyDate').fill('2026-07-01');
@@ -71,7 +78,14 @@ try {
   assert.equal(Number(await page.locator('#dailyUsdJpy').inputValue()), 154.005, 'USDJPY Sep 8 form auto-fill is wrong');
   console.log('Sep 8 historical date form auto-fill: PASS');
 
-  // A user-edited exact daily row must win over the repository history on reload.
+  await page.locator('#dailyDate').fill('2026-09-09');
+  await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(() => Number(document.querySelector('#dailyRate')?.value) === 48.4787);
+  assert.equal(Number(await page.locator('#dailyRate').inputValue()), 48.4787, 'USDTRY Sep 9 form auto-fill is wrong');
+  assert.equal(Number(await page.locator('#dailyUsdJpy').inputValue()), 153.21, 'USDJPY Sep 9 form auto-fill is wrong');
+  console.log('Sep 9 published date form auto-fill: PASS');
+
+  // A user-edited exact daily row must win over repository history on reload.
   await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
     const row = saved.daily.find((item) => item.date === '2026-09-08');
