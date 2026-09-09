@@ -1,0 +1,24 @@
+{
+  "source": "Hirose LION FX chart CSV",
+  "price": "ASK",
+  "timeframe": "4h",
+  "closeBarTime": "20:00 JST",
+  "closeSemantics": "20:00 4h candle close (end-of-day close at 24:00 JST)",
+  "highField": "高値",
+  "generatedFromUpload": "USDTRY_4時間足_ASK_202609092245.zip",
+  "calendarWeekdaysOnly": true,
+  "weekendPolicy": "Saturday/Sunday rows are ignored; Saturday early bars are not emitted as standalone daily rows.",
+  "historyStart": "2026-07-01",
+  "historyEnd": "2026-07-10",
+  "records": 8,
+  "history": [
+    {"date":"2026-07-01","usdTryAskClose23":46.6672,"usdJpyAskClose23":162.398,"usdTryAskDayHigh":46.7319,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"},
+    {"date":"2026-07-02","usdTryAskClose23":46.6962,"usdJpyAskClose23":161.043,"usdTryAskDayHigh":46.7481,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"},
+    {"date":"2026-07-03","usdTryAskClose23":46.8049,"usdJpyAskClose23":161.295,"usdTryAskDayHigh":46.8721,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"},
+    {"date":"2026-07-06","usdTryAskClose23":46.8234,"usdJpyAskClose23":162.36,"usdTryAskDayHigh":46.8323,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":5,"firstBar":"04:00","lastBar":"20:00"},
+    {"date":"2026-07-07","usdTryAskClose23":46.8411,"usdJpyAskClose23":161.916,"usdTryAskDayHigh":46.9026,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"},
+    {"date":"2026-07-08","usdTryAskClose23":46.8593,"usdJpyAskClose23":162.612,"usdTryAskDayHigh":46.928,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"},
+    {"date":"2026-07-09","usdTryAskClose23":46.877,"usdJpyAskClose23":162.369,"usdTryAskDayHigh":46.9311,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"},
+    {"date":"2026-07-10","usdTryAskClose23":46.9859,"usdJpyAskClose23":161.83,"usdTryAskDayHigh":47.0635,"sourceTimeframe":"4h","sourceBarTime":"20:00 JST","closeSemantics":"20:00 4h candle close (end-of-day)","dayHighBars":6,"firstBar":"00:00","lastBar":"20:00"}
+  ]
+}
