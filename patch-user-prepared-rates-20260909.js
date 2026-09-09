@@ -8,6 +8,7 @@
   const FEED_URL = './data/user-prepared-rates.json?v=20260909-0303';
   let history = [];
   let historyByDate = new Map();
+  const inputOverrides = new Map();
 
   // Keep `saved` as the persisted compatibility value for manual mode because the
   // older rate-source layer understands it and therefore does not race manual input.
@@ -83,10 +84,28 @@
     delete usdJpyInput.dataset.hiroseAskClose23;
   };
 
+  const overrideKey = (prefix, date) => `${prefix}:${date}`;
+  const restoreOverride = (prefix, date) => {
+    const override = inputOverrides.get(overrideKey(prefix, date));
+    if (!override) return false;
+    const rateInput = $(prefix + 'Rate');
+    const usdJpyInput = $(prefix + 'UsdJpy');
+    if (!rateInput || !usdJpyInput) return false;
+    if (override.rate != null) rateInput.value = override.rate;
+    if (override.usdJpy != null) usdJpyInput.value = override.usdJpy;
+    rateInput.dataset.rateSource = 'manual-override';
+    usdJpyInput.dataset.rateSource = 'manual-override';
+    const note = noteFor(prefix);
+    if (note) note.textContent = `${date} · 自動入力値を手修正`;
+    return true;
+  };
+
   const applySelectedSource = (prefix, date) => {
     const rateInput = $(prefix + 'Rate');
     const usdJpyInput = $(prefix + 'UsdJpy');
     if (!rateInput || !usdJpyInput || !date) return false;
+
+    if (restoreOverride(prefix, date)) return true;
 
     const mode = uiMode();
     const note = noteFor(prefix);
@@ -161,12 +180,40 @@
         // The older three-way selector handler is still present underneath this
         // compatibility patch; own the event before it can reinterpret `manual`.
         event.stopImmediatePropagation();
+        inputOverrides.clear();
         const next = persistMode(select.value);
         applySelectedSource('daily', $('dailyDate')?.value || isoToday());
         applySelectedSource('quickDaily', $('quickDailyDate')?.value || isoToday());
         toast(next === 'manual' ? 'レートを手入力に切り替えました' : 'レートを自動入力に切り替えました');
       }, true);
     }
+  };
+
+  const bindInputOverride = (prefix) => {
+    const dateInput = $(prefix + 'Date');
+    const rateInput = $(prefix + 'Rate');
+    const usdJpyInput = $(prefix + 'UsdJpy');
+    const form = $(prefix + 'Form');
+    if (!dateInput || !rateInput || !usdJpyInput || !form) return;
+
+    const remember = (field, value) => {
+      if (uiMode() !== 'auto') return;
+      const date = dateInput.value;
+      if (!date) return;
+      const key = overrideKey(prefix, date);
+      const previous = inputOverrides.get(key) || {};
+      inputOverrides.set(key, { ...previous, [field]: value });
+      // Older source listeners settle on timers. Re-assert the user's edit after
+      // those timers and again synchronously at submit time.
+      setTimeout(() => restoreOverride(prefix, date), 0);
+    };
+
+    rateInput.addEventListener('input', () => remember('rate', rateInput.value));
+    usdJpyInput.addEventListener('input', () => remember('usdJpy', usdJpyInput.value));
+    form.addEventListener('submit', () => {
+      const date = dateInput.value;
+      if (date) restoreOverride(prefix, date);
+    }, true);
   };
 
   // Migrate old explicit modes. `saved` maps naturally to Manual; old prepared
@@ -184,6 +231,7 @@
     const sync = () => setTimeout(() => applySelectedSource(prefix, dateInput?.value), 0);
     dateInput?.addEventListener('input', sync);
     dateInput?.addEventListener('change', sync);
+    bindInputOverride(prefix);
   });
 
   ensureSimpleRateUi();
