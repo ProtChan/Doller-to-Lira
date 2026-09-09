@@ -37,9 +37,9 @@ try {
   assert.equal(highChecks.sep4Merged?.usdTryAskDayHigh, 48.4947, 'owner-published Sep 4 high should remain authoritative');
   console.log('weekday-only ASK-high backfill: PASS');
 
-  await page.locator('#openBackupBtn').click();
+  // The desktop backup button is intentionally hidden at this mobile viewport.
+  // The rebuild control itself is injected into the backup dialog and must exist in the DOM.
   assert.equal(await page.locator('#rebuildReferenceDataBtn').count(), 1, 'bulk reference rebuild button missing');
-  await page.locator('#closeBackupBtn').click();
 
   // Exercise the real reset path, then rebuild all server-side reference inputs in one pass.
   page.once('dialog', (dialog) => dialog.accept());
