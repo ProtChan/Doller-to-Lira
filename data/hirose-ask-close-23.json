@@ -217,8 +217,11 @@
     },
     {
       "date": "2026-09-07",
-      "usdTryAskClose23": 48.4351,
-      "usdJpyAskClose23": 154.289
+      "usdTryAskClose23": 48.4531,
+      "usdJpyAskClose23": 154.289,
+      "usdTryAskDayHigh": 48.4922,
+      "verification": "owner-manual",
+      "publishedAt": "2026-09-09T10:13:38Z"
     },
     {
       "date": "2026-09-08",
@@ -229,5 +232,5 @@
       "publishedAt": "2026-09-09T10:12:12Z"
     }
   ],
-  "lastManualPublication": "2026-09-09T10:12:12Z"
+  "lastManualPublication": "2026-09-09T10:13:38Z"
 }
