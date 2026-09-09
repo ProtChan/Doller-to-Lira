@@ -25,12 +25,13 @@
     source('patch-hirose-history-20260906.js', 'Hirose history patch'),
     source('patch-hirose-rate-history-20260907.js', 'Hirose rate history patch'),
     source('patch-hirose-pending-bootstrap-20260907.js', 'Hirose pending bootstrap'),
+    source('patch-hirose-input-settle-20260909.js', 'Hirose input settle patch'),
     source('patch-close-conversion-20260908.js', 'close conversion patch'),
     source('patch-capital-history-20260908.js', 'capital history patch'),
     source('patch-rate-source-edit-performance-20260908.js', 'rate/edit/performance patch'),
     source('patch-user-prepared-rates-20260909.js', 'user-prepared rate patch')
   ])
-    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, closeConversionSource, capitalHistorySource, rateEditPerformanceSource, userPreparedRateSource]) => {
+    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, hiroseInputSettleSource, closeConversionSource, capitalHistorySource, rateEditPerformanceSource, userPreparedRateSource]) => {
       const oldMoneyBody = "${Number(v) < 0 ? '-' : ''}¥${Math.abs(Number(v)).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}";
       const newMoneyBody = "${Math.trunc(Number(v)) < 0 ? '-' : ''}¥${Math.abs(Math.trunc(Number(v))).toLocaleString('ja-JP')}";
       const displayNormalizedAppSource = appSource.replace(oldMoneyBody, newMoneyBody);
@@ -39,7 +40,7 @@
       const defaultUnitsNormalizedAppSource = displayNormalizedAppSource.replace('unitsPerLot: 10000', 'unitsPerLot: 1000');
       if (defaultUnitsNormalizedAppSource === displayNormalizedAppSource) throw new Error('default lot-size patch target missing');
 
-      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n${userPreparedRateSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${hiroseInputSettleSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n${userPreparedRateSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
       const status = document.querySelector('.local-status');
       if (status) status.innerHTML = '<i></i>LOCAL · 0303';
