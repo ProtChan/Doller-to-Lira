@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = '20260909-0303';
+  const BUILD = '20260909-1402';
   const showError = (message) => {
     document.documentElement.dataset.appLoadError = message;
     const bar = document.createElement('div');
@@ -29,7 +29,7 @@
     source('patch-close-conversion-20260908.js', 'close conversion patch'),
     source('patch-capital-history-20260908.js', 'capital history patch'),
     source('patch-rate-source-edit-performance-20260908.js', 'rate/edit/performance patch'),
-    source('patch-user-prepared-rates-20260909.js', 'user-prepared rate patch')
+    source('patch-user-prepared-rates-20260909.js', 'unified rate input patch')
   ])
     .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, hiroseInputSettleSource, closeConversionSource, capitalHistorySource, rateEditPerformanceSource, userPreparedRateSource]) => {
       const oldMoneyBody = "${Number(v) < 0 ? '-' : ''}¥${Math.abs(Number(v)).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}";
@@ -43,7 +43,7 @@
       (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${hiroseInputSettleSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n${userPreparedRateSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
       const status = document.querySelector('.local-status');
-      if (status) status.innerHTML = '<i></i>LOCAL · 0303';
+      if (status) status.innerHTML = '<i></i>LOCAL · 1402';
     })
     .catch((error) => showError(error?.message || String(error)));
 })();
