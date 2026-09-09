@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#090b0f" />
+  <title>ヒロセレート配信 | ドルとリラ</title>
+  <style>
+    :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#090b0f;color:#f2f5f8}
+    *{box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#131821 0,#090b0f 42%);padding:max(18px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom))}
+    .wrap{max-width:720px;margin:0 auto}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}.back{color:#9aa6b5;text-decoration:none;font-size:13px}.brand{font-size:12px;color:#596373;letter-spacing:.12em}.card{border:1px solid #202733;background:rgba(14,18,24,.92);border-radius:18px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+    h1{font-size:25px;line-height:1.2;margin:0 0 7px}p{margin:0;color:#7e8997;font-size:13px;line-height:1.65}.latest{margin:16px 0 18px;padding:12px 14px;border:1px solid #1e2732;border-radius:12px;background:#0b0f14}.latest span{display:block;color:#596373;font-size:10px;letter-spacing:.1em;margin-bottom:4px}.latest strong{font-size:13px;font-weight:650}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{display:block;font-size:11px;color:#7d8896;letter-spacing:.02em}input{width:100%;margin-top:7px;padding:13px 12px;border:1px solid #27313d;border-radius:11px;background:#090d12;color:#f5f7fa;font:600 16px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;outline:none}input:focus{border-color:#4b647e}.date-row{display:flex;gap:8px}.date-row input{flex:1}.ghost{margin-top:7px;border:1px solid #27313d;border-radius:11px;background:transparent;color:#9aa6b5;padding:0 12px;font-weight:650}.hint{margin-top:14px;padding:11px 12px;border-radius:10px;background:#0b1016;color:#667382;font-size:11px;line-height:1.55}.error{min-height:18px;margin:11px 0 0;color:#ff8b96;font-size:12px}.actions{display:flex;gap:10px;margin-top:14px}.publish{display:flex;align-items:center;justify-content:center;flex:1;min-height:48px;border-radius:12px;background:#f2f5f8;color:#090b0f;text-decoration:none;font-weight:800;font-size:14px}.publish.disabled{pointer-events:none;opacity:.35}.secondary{display:flex;align-items:center;justify-content:center;padding:0 15px;border:1px solid #27313d;border-radius:12px;color:#9aa6b5;text-decoration:none;font-size:12px}.foot{margin-top:16px;color:#56616f;font-size:11px;line-height:1.6}
+    @media(max-width:560px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.card{padding:16px}.actions{flex-direction:column}.secondary{min-height:44px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><a class="back" href="./">← ドルとリラ</a><span class="brand">HIROSE ASK PUBLISHER</span></div>
+    <main class="card">
+      <h1>ヒロセ ASK レート配信</h1>
+      <p>確認した値を入力すると、GitHub Issue が作成されます。Issue を投稿すると owner 限定の Action が検証して公式データJSONへ反映し、Pages が自動再配信します。</p>
+      <div class="latest"><span>LATEST PUBLISHED</span><strong id="latest">読み込み中…</strong></div>
+      <form id="form">
+        <div class="grid">
+          <label class="full">対象日（23:00足の開始日）
+            <div class="date-row"><input type="date" id="date" required /><button class="ghost" id="yesterday" type="button">昨日</button></div>
+          </label>
+          <label>USD/TRY 23:00 ASK Close<input type="number" id="usdTryClose" step="0.0001" min="0" inputmode="decimal" required /></label>
+          <label>USD/JPY 23:00 ASK Close<input type="number" id="usdJpyClose" step="0.001" min="0" inputmode="decimal" required /></label>
+          <label>USD/TRY 日中最大 ASK<input type="number" id="usdTryHigh" step="0.0001" min="0" inputmode="decimal" required /></label>
+          <label>USD/JPY 日中最大 ASK <small style="color:#4f5b69">任意</small><input type="number" id="usdJpyHigh" step="0.001" min="0" inputmode="decimal" /></label>
+        </div>
+        <div class="hint">USD/TRY 日中最大ASKは、売り建玉にとってその日の最悪レートとしてロスカットグラフへ表示します。23:00足は 23:00〜23:59 の足なので、Close 確定後に入力してください。</div>
+        <div class="error" id="error"></div>
+        <div class="actions"><a class="publish disabled" id="publish" href="#" target="_blank" rel="noopener">GitHubで配信する</a><a class="secondary" href="https://github.com/ProtChan/Doller-to-Lira/issues" target="_blank" rel="noopener">配信履歴</a></div>
+      </form>
+      <div class="foot">GitHubへの認証情報をこのページへ保存しません。公開処理はリポジトリ所有者が投稿した専用Issueだけを受け付けます。過去日を指定すると訂正配信もできます。</div>
+    </main>
+  </div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const repoIssueUrl = 'https://github.com/ProtChan/Doller-to-Lira/issues/new';
+  const parts = (offsetDays = 0) => {
+    const now = new Date(Date.now() + offsetDays * 86400000);
+    const list = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(now);
+    const map = Object.fromEntries(list.map((p) => [p.type, p.value]));
+    return `${map.year}-${map.month}-${map.day}`;
+  };
+  $('date').value = parts(0);
+  $('yesterday').addEventListener('click', () => { $('date').value = parts(-1); build(); });
+
+  const number = (id) => {
+    const raw = $(id).value.trim();
+    return raw === '' ? null : Number(raw);
+  };
+
+  function build() {
+    const date = $('date').value;
+    const usdTryAskClose23 = number('usdTryClose');
+    const usdJpyAskClose23 = number('usdJpyClose');
+    const usdTryAskDayHigh = number('usdTryHigh');
+    const usdJpyAskDayHigh = number('usdJpyHigh');
+    let error = '';
+    if (!date || !(usdTryAskClose23 > 0) || !(usdJpyAskClose23 > 0) || !(usdTryAskDayHigh > 0)) error = '日付・2つのClose・USD/TRY日中最大ASKを入力してください。';
+    else if (usdTryAskDayHigh < usdTryAskClose23) error = 'USD/TRY 日中最大ASKは23:00 Close以上である必要があります。';
+    else if (usdJpyAskDayHigh != null && (!(usdJpyAskDayHigh > 0) || usdJpyAskDayHigh < usdJpyAskClose23)) error = 'USD/JPY 日中最大ASKは23:00 Close以上で入力してください。';
+
+    $('error').textContent = error;
+    const link = $('publish');
+    if (error) { link.classList.add('disabled'); link.href = '#'; return; }
+
+    const payload = { date, usdTryAskClose23, usdJpyAskClose23, usdTryAskDayHigh };
+    if (usdJpyAskDayHigh != null) payload.usdJpyAskDayHigh = usdJpyAskDayHigh;
+    const body = [
+      'ヒロセ LION FX ASK 手動配信',
+      '',
+      `- 対象日: ${date}`,
+      `- USD/TRY 23:00 ASK Close: ${usdTryAskClose23}`,
+      `- USD/JPY 23:00 ASK Close: ${usdJpyAskClose23}`,
+      `- USD/TRY 日中最大 ASK: ${usdTryAskDayHigh}`,
+      `- USD/JPY 日中最大 ASK: ${usdJpyAskDayHigh == null ? '未入力' : usdJpyAskDayHigh}`,
+      '',
+      '<!-- DTL_HIROSE_RATE_V1',
+      JSON.stringify(payload),
+      '-->'
+    ].join('\n');
+    const params = new URLSearchParams({ title: `[HIROSE-RATE] ${date}`, body });
+    link.href = `${repoIssueUrl}?${params.toString()}`;
+    link.classList.remove('disabled');
+  }
+
+  $('form').addEventListener('input', build);
+  build();
+
+  fetch(`./data/hirose-ask-close-23.json?publisher=${Date.now()}`, { cache:'no-store' })
+    .then((r) => r.json())
+    .then((data) => {
+      const row = Array.isArray(data.history) ? data.history.at(-1) : null;
+      if (!row) throw new Error('empty');
+      const worst = Number(row.usdTryAskDayHigh) > 0 ? ` / worst ${Number(row.usdTryAskDayHigh).toFixed(4)}` : '';
+      $('latest').textContent = `${row.date} · USD/TRY ${Number(row.usdTryAskClose23).toFixed(4)} · USD/JPY ${Number(row.usdJpyAskClose23).toFixed(3)}${worst}`;
+    })
+    .catch(() => { $('latest').textContent = '最新データを取得できませんでした'; });
+})();
+</script>
+</body>
+</html>
