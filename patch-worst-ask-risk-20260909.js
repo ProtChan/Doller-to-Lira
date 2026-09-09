@@ -18,6 +18,17 @@
     return value > 0 ? value : null;
   };
 
+  const worstMaintenanceAt = (date, dailyRow = null) => {
+    const worst = worstAskAt(date);
+    if (!(worst > 0)) return null;
+    const row = dailyRow || derivedDaily().find((item) => item.date === date) || null;
+    const usdJpy = Number(row?.usdJpy);
+    if (!(usdJpy > 0)) return null;
+    const stressedTryJpy = usdJpy / worst;
+    const value = maintenance(date, worst, stressedTryJpy);
+    return Number.isFinite(value) ? value : null;
+  };
+
   const installPublisherEntry = () => {
     if ($('openRatePublisherBtn')) return;
     const head = document.querySelector('#view-daily .section-head');
@@ -33,7 +44,6 @@
     if (meta) meta.before(button); else head.appendChild(button);
   };
 
-  const baseRenderRiskChartsWorstAsk = renderRiskCharts;
   renderRiskCharts = function() {
     if (activeTab !== 'risk' || typeof Chart === 'undefined') return;
     const d = derivedDaily();
@@ -50,14 +60,14 @@
           labels:d.map((x) => x.date.slice(5)),
           datasets:[
             {label:'23:00 ASK Close',data:d.map((x) => x.rate),borderColor:'#f2f5f8',borderWidth:2,pointRadius:0,tension:.15},
-            {label:'日中最大ASK',data:worst,borderColor:'#ffd166',backgroundColor:'rgba(255,209,102,.08)',borderWidth:1.7,pointRadius:2.4,pointHoverRadius:4,spanGaps:false,tension:.12},
+            {label:'日中最大ASK',data:worst,borderColor:'#ffd166',backgroundColor:'rgba(255,209,102,.08)',borderWidth:1.9,pointRadius:3,pointHoverRadius:5,spanGaps:false,tension:.12},
             {label:'推定LC',data:d.map((x) => x.lc),borderColor:'#ff7582',borderDash:[5,5],borderWidth:1.6,pointRadius:0,spanGaps:true}
           ]
         },
         options:base
       });
       const title = $('lcChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span');
-      if (title) title.textContent = '日中最大ASK＝売り建玉の当日最悪値 / LCは23時スナップショット基準';
+      if (title) title.textContent = '日中最大ASK＝配信済み実測値 / LCは23時USDJPY固定ストレス基準';
     }
 
     if ($('maintenanceChart')) {
@@ -67,11 +77,14 @@
       charts.maintenanceChart = new Chart($('maintenanceChart'), {
         type:'line',
         data:{labels:d.map((x)=>x.date.slice(5)),datasets:[
-          {label:'維持率',data:d.map((x)=>Number.isFinite(x.maintenance)?x.maintenance:null),borderColor:'#7ee787',backgroundColor:'rgba(126,231,135,.05)',borderWidth:2.1,pointRadius:0,fill:true},
+          {label:'23:00 維持率',data:d.map((x)=>Number.isFinite(x.maintenance)?x.maintenance:null),borderColor:'#7ee787',backgroundColor:'rgba(126,231,135,.05)',borderWidth:2.1,pointRadius:0,fill:true},
+          {label:'日中最大ASK時 維持率',data:d.map((x)=>worstMaintenanceAt(x.date, x)),borderColor:'#ffd166',borderWidth:1.9,pointRadius:3,pointHoverRadius:5,spanGaps:false,tension:.12},
           {label:`LC ${state.settings.lcThreshold}%`,data:d.map(()=>Number(state.settings.lcThreshold)),borderColor:'#ff7582',borderDash:[5,5],borderWidth:1.4,pointRadius:0}
         ]},
         options:base
       });
+      const title = $('maintenanceChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span');
+      if (title) title.textContent = '日中最大ASK時は同日23:00 USD/JPYを固定して再計算';
     }
   };
 
@@ -86,10 +99,17 @@
 
     const lc = Number(snapshot.lc);
     const gap = lc > 0 ? (lc / worst - 1) * 100 : null;
+    const worstMaintenance = worstMaintenanceAt(snapshot.date, snapshot);
+
     const worstFact = document.createElement('div');
     worstFact.className = 'risk-fact';
     worstFact.innerHTML = `<span>当日最大ASK</span><strong>${rateFmt(worst)}</strong>`;
     host.appendChild(worstFact);
+
+    const maintenanceFact = document.createElement('div');
+    maintenanceFact.className = 'risk-fact';
+    maintenanceFact.innerHTML = `<span>最大ASK時維持率</span><strong>${worstMaintenance == null ? '—' : `${num(worstMaintenance,1)}%`}</strong>`;
+    host.appendChild(maintenanceFact);
 
     const gapFact = document.createElement('div');
     gapFact.className = 'risk-fact';
@@ -117,6 +137,7 @@
   observer.observe(root, { attributes:true, attributeFilter:['data-hirose-rate-history-ready'] });
 
   window.__DTL_WORST_ASK_AT__ = worstAskAt;
+  window.__DTL_WORST_ASK_MAINTENANCE_AT__ = (date) => worstMaintenanceAt(date);
   installPublisherEntry();
   root.dataset.worstAskRisk = '1';
 })();
