@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dollar-to-lira-pwa-1842';
+const CACHE_NAME = 'dollar-to-lira-pwa-1925';
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,7 +7,7 @@ const APP_SHELL = [
   './pwa-mobile-20260906.css?v=20260906-1140',
   './manifest.webmanifest?v=20260906-1141',
   './icon-dollar-lira.svg?v=20260906-1141',
-  './runtime-20260906-1140.js?v=20260909-0303'
+  './runtime-20260906-1140.js?v=20260909-1925'
 ];
 
 self.addEventListener('install', (event) => {
@@ -42,7 +42,23 @@ self.addEventListener('fetch', (event) => {
 
   const isNavigation = request.mode === 'navigate';
   const isData = url.pathname.includes('/data/');
-  const isImmutableAsset = !isNavigation && !isData && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
+  const isRuntime = /\/runtime-[^/]+\.js$/.test(url.pathname);
+  const isImmutableAsset = !isNavigation && !isData && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
+
+  // Runtime controls versioned patch URLs. Prefer network so an installed PWA
+  // cannot pin an old runtime after a deployment.
+  if (isRuntime) {
+    event.respondWith((async () => {
+      try {
+        return await put(request, await fetch(request, { cache: 'no-store' }));
+      } catch (_) {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw new Error('offline');
+      }
+    })());
+    return;
+  }
 
   if (isImmutableAsset) {
     event.respondWith((async () => {
