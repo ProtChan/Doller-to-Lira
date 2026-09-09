@@ -34,12 +34,14 @@ jobs:
           node --check patch-capital-history-20260908.js
           node --check patch-rate-source-edit-performance-20260908.js
           node --check patch-worst-ask-risk-20260909.js
+          node --check patch-reference-data-rebuild-20260909.js
           node --check scripts/e2e-hirose-rates.mjs
           node --check scripts/e2e-close-conversion.mjs
           node --check scripts/e2e-capital-history.mjs
           node --check scripts/e2e-hirose-weekend.mjs
           node --check scripts/e2e-rate-edit-performance.mjs
           node --check scripts/e2e-publisher-risk.mjs
+          node --check scripts/e2e-reference-rebuild.mjs
           python3 -m py_compile scripts/publish_hirose_rate.py scripts/test_publish_hirose_rate.py
           PYTHONPATH=scripts python3 scripts/test_publish_hirose_rate.py
       - name: Runtime smoke test
@@ -61,6 +63,7 @@ jobs:
           BROWSER=chromium node scripts/e2e-hirose-weekend.mjs
           BROWSER=chromium node scripts/e2e-rate-edit-performance.mjs
           BROWSER=chromium node scripts/e2e-publisher-risk.mjs
+          BROWSER=chromium node scripts/e2e-reference-rebuild.mjs
       - name: Real WebKit DOM interaction test (local build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/dtl-http-webkit.log 2>&1 &
@@ -74,6 +77,7 @@ jobs:
           BROWSER=webkit node scripts/e2e-hirose-weekend.mjs
           BROWSER=webkit node scripts/e2e-rate-edit-performance.mjs
           BROWSER=webkit node scripts/e2e-publisher-risk.mjs
+          BROWSER=webkit node scripts/e2e-reference-rebuild.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
@@ -98,6 +102,7 @@ jobs:
           node scripts/e2e-hirose-weekend.mjs
           node scripts/e2e-rate-edit-performance.mjs
           node scripts/e2e-publisher-risk.mjs
+          node scripts/e2e-reference-rebuild.mjs
       - name: Real WebKit DOM interaction test (deployed Pages)
         env:
           TEST_URL: ${{ steps.deployment.outputs.page_url }}
@@ -111,3 +116,4 @@ jobs:
           node scripts/e2e-hirose-weekend.mjs
           node scripts/e2e-rate-edit-performance.mjs
           node scripts/e2e-publisher-risk.mjs
+          node scripts/e2e-reference-rebuild.mjs
