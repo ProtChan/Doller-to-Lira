@@ -1,13 +1,14 @@
 {
-  "source": "Hirose LION FX chart CSV",
+  "source": "Hirose LION FX ASK",
   "price": "ASK",
   "timeframe": "60m",
   "barTime": "23:00 JST",
   "closeField": "終値",
+  "description": "Historical Hirose ASK CSV plus owner-verified daily publication. usdTryAskDayHigh is the intraday maximum ASK used as the adverse short-position reference.",
   "generatedFromUpload": "USDTRY_60分足_ASK_202609072255.zip",
   "historyStart": "2026-07-10",
-  "historyEnd": "2026-09-07",
-  "records": 42,
+  "historyEnd": "2026-09-08",
+  "records": 43,
   "history": [
     {"date":"2026-07-10","usdTryAskClose23":46.9859,"usdJpyAskClose23":161.83},
     {"date":"2026-07-13","usdTryAskClose23":47.0032,"usdJpyAskClose23":162.35},
@@ -50,6 +51,7 @@
     {"date":"2026-09-02","usdTryAskClose23":48.2982,"usdJpyAskClose23":158.744},
     {"date":"2026-09-03","usdTryAskClose23":48.3153,"usdJpyAskClose23":155.422},
     {"date":"2026-09-04","usdTryAskClose23":48.4438,"usdJpyAskClose23":156.12},
-    {"date":"2026-09-07","usdTryAskClose23":48.4351,"usdJpyAskClose23":154.289}
+    {"date":"2026-09-07","usdTryAskClose23":48.4351,"usdJpyAskClose23":154.289},
+    {"date":"2026-09-08","usdTryAskClose23":48.461,"usdJpyAskClose23":154.005,"verification":"owner-manual"}
   ]
 }
