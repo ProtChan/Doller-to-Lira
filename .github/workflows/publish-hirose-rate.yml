@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 concurrency:
   group: hirose-rate-publish
@@ -59,6 +60,13 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      # Commits made with GITHUB_TOKEN do not trigger ordinary push workflows.
+      # workflow_dispatch is explicitly allowed, so request the Pages workflow here.
+      - name: Redeploy Pages with latest rate feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+
       - name: Confirm publication
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,9 +75,9 @@ jobs:
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           if [ "$CHANGED" = "true" ]; then
-            BODY="配信データを更新しました。commit: ${SHA}. GitHub Pages はこの push から自動再配信されます。"
+            BODY="配信データを更新しました。commit: ${SHA}. GitHub Pages の再配信も要求しました。"
           else
-            BODY="同じ値がすでに配信済みだったため、データ変更はありませんでした。"
+            BODY="同じ値がすでに配信済みでした。GitHub Pages の再配信は要求しました。"
           fi
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$BODY"
           gh issue close "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY"
