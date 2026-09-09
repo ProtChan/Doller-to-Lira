@@ -57,7 +57,7 @@ try {
   await page.locator('#detailEditCloseBtn').click();
   assert.equal(Number(await page.locator('#closeTryJpy').inputValue()), 3.232, 'settlement editor did not restore conversion rate');
   assert.equal(Number(await page.locator('#closeRate').inputValue()), 48.3167, 'settlement editor did not restore close rate');
-  await page.locator('#closePositionDialog [value="cancel"]').first().click();
+  await page.locator('#closePositionDialog .modal-footer .outline-btn').click();
   console.log('closed-position settlement editing: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
