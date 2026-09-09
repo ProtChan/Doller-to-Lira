@@ -48,14 +48,18 @@ try {
   await page.locator('[data-tab="daily"]').click();
   await page.locator('#dailyDate').fill('2026-07-11');
   await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 0, { timeout: 5000 });
   assert.equal(Number(await page.locator('#dailySwap').inputValue()), 0, 'Saturday input must display 0 swap');
 
   await page.locator('#dailyDate').fill('2026-07-12');
   await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 0, { timeout: 5000 });
   assert.equal(Number(await page.locator('#dailySwap').inputValue()), 0, 'Sunday input must display 0 swap');
 
   await page.locator('#dailyDate').fill('2026-07-13');
   await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 117.5, { timeout: 5000 });
+  await page.waitForFunction(() => /2026-07-10表記 → 2026-07-13計上/.test(document.querySelector('#dailySwap')?.closest('label')?.innerText || ''), { timeout: 5000 });
   assert.equal(Number(await page.locator('#dailySwap').inputValue()), 117.5, 'Monday input must display Friday swap');
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-10表記 → 2026-07-13計上/, 'Monday note must show Friday source date');
   console.log('weekend daily input 0 / Monday Friday-source auto-fill: PASS');
