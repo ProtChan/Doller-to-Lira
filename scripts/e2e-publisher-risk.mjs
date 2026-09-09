@@ -33,14 +33,30 @@ try {
   await publisher.close();
 
   const page = await context.newPage();
-  await page.route('**/data/hirose-ask-close-23.json*', async (route) => {
-    const response = await route.fetch();
-    const data = await response.json();
-    const row = data.history.find((item) => item.date === '2026-09-08');
-    if (row) row.usdTryAskDayHigh = 48.9;
-    await route.fulfill({ response, json: data });
-  });
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
+
+  // Give the three published high-ASK dates a live short position so stressed maintenance is finite.
+  await page.evaluate(() => {
+    const key = 'dollar-to-lira:v1';
+    const saved = JSON.parse(localStorage.getItem(key) || '{}');
+    saved.settings = { ...(saved.settings || {}), capital: 500000, unitsPerLot: 1000, lcThreshold: 100 };
+    saved.positions = [{
+      id:'worst-ask-risk-test',
+      date:'2026-09-01',
+      side:'short',
+      entryRate:48.2772,
+      lots:20,
+      memo:'risk overlay test',
+      closeDate:null,
+      closeRate:null
+    }];
+    saved.updatedAt = new Date().toISOString();
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
@@ -50,24 +66,55 @@ try {
 
   await page.locator('[data-tab="risk"]').click();
   await page.waitForFunction(() => {
-    const canvas = document.querySelector('#lcChart');
-    const chart = window.Chart?.getChart?.(canvas);
-    return !!chart?.data?.datasets?.some((dataset) => dataset.label === '日中最大ASK');
+    const lc = window.Chart?.getChart?.(document.querySelector('#lcChart'));
+    const maintenance = window.Chart?.getChart?.(document.querySelector('#maintenanceChart'));
+    return !!lc?.data?.datasets?.some((dataset) => dataset.label === '日中最大ASK') &&
+      !!maintenance?.data?.datasets?.some((dataset) => dataset.label === '日中最大ASK時 維持率');
   }, { timeout: 10000 });
 
   const risk = await page.evaluate(() => {
-    const chart = Chart.getChart(document.querySelector('#lcChart'));
-    const worst = chart.data.datasets.find((dataset) => dataset.label === '日中最大ASK');
+    const lc = Chart.getChart(document.querySelector('#lcChart'));
+    const maintenance = Chart.getChart(document.querySelector('#maintenanceChart'));
+    const worst = lc.data.datasets.find((dataset) => dataset.label === '日中最大ASK');
+    const closeMaintenance = maintenance.data.datasets.find((dataset) => dataset.label === '23:00 維持率');
+    const worstMaintenance = maintenance.data.datasets.find((dataset) => dataset.label === '日中最大ASK時 維持率');
     return {
-      helper: window.__DTL_WORST_ASK_AT__?.('2026-09-08'),
-      values: worst?.data || [],
-      note: document.querySelector('#lcChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span')?.textContent || ''
+      labels: lc.data.labels,
+      worstValues: worst?.data || [],
+      closeMaintenanceValues: closeMaintenance?.data || [],
+      worstMaintenanceValues: worstMaintenance?.data || [],
+      helpers: {
+        sep4: window.__DTL_WORST_ASK_AT__?.('2026-09-04'),
+        sep7: window.__DTL_WORST_ASK_AT__?.('2026-09-07'),
+        sep8: window.__DTL_WORST_ASK_AT__?.('2026-09-08'),
+        sep8Maintenance: window.__DTL_WORST_ASK_MAINTENANCE_AT__?.('2026-09-08')
+      },
+      lcNote: document.querySelector('#lcChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span')?.textContent || '',
+      maintenanceNote: document.querySelector('#maintenanceChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span')?.textContent || '',
+      facts: document.querySelector('#riskFacts')?.innerText || ''
     };
   });
-  assert.equal(risk.helper, 48.9, 'worst ASK helper did not expose published high');
-  assert.ok(risk.values.some((value) => Number(value) === 48.9), 'LC chart did not plot published worst ASK');
-  assert.match(risk.note, /日中最大ASK/);
-  console.log(`worst ASK LC overlay (${browserName}): PASS`);
+
+  assert.equal(risk.helpers.sep4, 48.4947, 'Sep 4 published high ASK missing');
+  assert.equal(risk.helpers.sep7, 48.4922, 'Sep 7 published high ASK missing');
+  assert.equal(risk.helpers.sep8, 48.553, 'Sep 8 published high ASK missing');
+  assert.ok(Number.isFinite(risk.helpers.sep8Maintenance), 'worst-ASK maintenance helper is not finite');
+
+  for (const [label, expected] of [['09-04',48.4947],['09-07',48.4922],['09-08',48.553]]) {
+    const index = risk.labels.indexOf(label);
+    assert.ok(index >= 0, `${label} missing from risk chart`);
+    assert.equal(Number(risk.worstValues[index]), expected, `${label} high ASK was not plotted`);
+    assert.ok(Number.isFinite(Number(risk.worstMaintenanceValues[index])), `${label} stressed maintenance missing`);
+    assert.ok(
+      Number(risk.worstMaintenanceValues[index]) < Number(risk.closeMaintenanceValues[index]),
+      `${label} short-position stressed maintenance should be below 23:00 maintenance`
+    );
+  }
+
+  assert.match(risk.lcNote, /日中最大ASK/);
+  assert.match(risk.maintenanceNote, /23:00 USD\/JPY/);
+  assert.match(risk.facts, /最大ASK時維持率/);
+  console.log(`three published worst ASK points + stressed maintenance (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
