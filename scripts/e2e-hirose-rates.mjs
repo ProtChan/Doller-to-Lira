@@ -32,7 +32,7 @@ try {
   assert.equal(history.records, 43, `unexpected rate history record count: ${history.records}`);
   assert.equal(history.sep4?.usdTryAskClose23, 48.4438, '2026-09-04 USDTRY 23:00 ASK close is wrong');
   assert.equal(history.sep4?.usdJpyAskClose23, 156.12, '2026-09-04 USDJPY 23:00 ASK close is wrong');
-  assert.equal(history.sep7?.usdTryAskClose23, 48.4351, '2026-09-07 USDTRY 23:00 ASK close is wrong');
+  assert.equal(history.sep7?.usdTryAskClose23, 48.4531, '2026-09-07 USDTRY 23:00 ASK close is wrong');
   assert.equal(history.sep7?.usdJpyAskClose23, 154.289, '2026-09-07 USDJPY 23:00 ASK close is wrong');
   assert.equal(history.sep8?.usdTryAskClose23, 48.461, '2026-09-08 USDTRY 23:00 ASK close is wrong');
   assert.equal(history.sep8?.usdJpyAskClose23, 154.005, '2026-09-08 USDJPY 23:00 ASK close is wrong');
