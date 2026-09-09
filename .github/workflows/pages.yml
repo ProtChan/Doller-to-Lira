@@ -35,6 +35,7 @@ jobs:
           node --check patch-rate-source-edit-performance-20260908.js
           node --check patch-worst-ask-risk-20260909.js
           node --check patch-reference-data-rebuild-20260909.js
+          node --check patch-private-publisher-daily-layout-20260909.js
           node --check scripts/e2e-hirose-rates.mjs
           node --check scripts/e2e-close-conversion.mjs
           node --check scripts/e2e-capital-history.mjs
