@@ -36,7 +36,9 @@ jobs:
           node --check patch-worst-ask-risk-20260909.js
           node --check patch-reference-data-rebuild-20260909.js
           node --check patch-private-publisher-daily-layout-20260909.js
+          node --check patch-live-rate-refresh-20260910.js
           node --check scripts/e2e-hirose-rates.mjs
+          node --check scripts/e2e-live-rate-refresh.mjs
           node --check scripts/e2e-close-conversion.mjs
           node --check scripts/e2e-capital-history.mjs
           node --check scripts/e2e-hirose-weekend.mjs
@@ -59,6 +61,7 @@ jobs:
           BROWSER=chromium node scripts/e2e.mjs
           BROWSER=chromium node scripts/e2e-hirose-pending.mjs
           BROWSER=chromium node scripts/e2e-hirose-rates.mjs
+          BROWSER=chromium node scripts/e2e-live-rate-refresh.mjs
           BROWSER=chromium node scripts/e2e-close-conversion.mjs
           BROWSER=chromium node scripts/e2e-capital-history.mjs
           BROWSER=chromium node scripts/e2e-hirose-weekend.mjs
@@ -73,6 +76,7 @@ jobs:
           BROWSER=webkit node scripts/e2e.mjs
           BROWSER=webkit node scripts/e2e-hirose-pending.mjs
           BROWSER=webkit node scripts/e2e-hirose-rates.mjs
+          BROWSER=webkit node scripts/e2e-live-rate-refresh.mjs
           BROWSER=webkit node scripts/e2e-close-conversion.mjs
           BROWSER=webkit node scripts/e2e-capital-history.mjs
           BROWSER=webkit node scripts/e2e-hirose-weekend.mjs
@@ -98,6 +102,7 @@ jobs:
           node scripts/e2e.mjs
           node scripts/e2e-hirose-pending.mjs
           node scripts/e2e-hirose-rates.mjs
+          node scripts/e2e-live-rate-refresh.mjs
           node scripts/e2e-close-conversion.mjs
           node scripts/e2e-capital-history.mjs
           node scripts/e2e-hirose-weekend.mjs
@@ -112,6 +117,7 @@ jobs:
           node scripts/e2e.mjs
           node scripts/e2e-hirose-pending.mjs
           node scripts/e2e-hirose-rates.mjs
+          node scripts/e2e-live-rate-refresh.mjs
           node scripts/e2e-close-conversion.mjs
           node scripts/e2e-capital-history.mjs
           node scripts/e2e-hirose-weekend.mjs
