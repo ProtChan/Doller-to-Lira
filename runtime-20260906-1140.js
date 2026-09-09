@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = '20260909-1925';
+  const BUILD = '20260909-2031';
   const showError = (message) => {
     document.documentElement.dataset.appLoadError = message;
     const bar = document.createElement('div');
@@ -30,9 +30,10 @@
     source('patch-capital-history-20260908.js', 'capital history patch'),
     source('patch-rate-source-edit-performance-20260908.js', 'rate/edit/performance patch'),
     source('patch-user-prepared-rates-20260909.js', 'unified rate input patch'),
-    source('patch-worst-ask-risk-20260909.js', 'worst ASK risk patch')
+    source('patch-worst-ask-risk-20260909.js', 'worst ASK risk patch'),
+    source('patch-reference-data-rebuild-20260909.js', 'reference data rebuild patch')
   ])
-    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, hiroseInputSettleSource, closeConversionSource, capitalHistorySource, rateEditPerformanceSource, userPreparedRateSource, worstAskRiskSource]) => {
+    .then(([appSource, accountingSource, swapDecimalSource, calendarSource, pwaSource, accessLayoutSource, swapPrecisionSource, hiroseHistorySource, hiroseRateHistorySource, hirosePendingBootstrapSource, hiroseInputSettleSource, closeConversionSource, capitalHistorySource, rateEditPerformanceSource, userPreparedRateSource, worstAskRiskSource, referenceDataRebuildSource]) => {
       const oldMoneyBody = "${Number(v) < 0 ? '-' : ''}¥${Math.abs(Number(v)).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}";
       const newMoneyBody = "${Math.trunc(Number(v)) < 0 ? '-' : ''}¥${Math.abs(Math.trunc(Number(v))).toLocaleString('ja-JP')}";
       const displayNormalizedAppSource = appSource.replace(oldMoneyBody, newMoneyBody);
@@ -41,10 +42,10 @@
       const defaultUnitsNormalizedAppSource = displayNormalizedAppSource.replace('unitsPerLot: 10000', 'unitsPerLot: 1000');
       if (defaultUnitsNormalizedAppSource === displayNormalizedAppSource) throw new Error('default lot-size patch target missing');
 
-      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${hiroseInputSettleSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n${userPreparedRateSource}\n${worstAskRiskSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
+      (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${hiroseInputSettleSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n${userPreparedRateSource}\n${worstAskRiskSource}\n${referenceDataRebuildSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
       const status = document.querySelector('.local-status');
-      if (status) status.innerHTML = '<i></i>LOCAL · 1925';
+      if (status) status.innerHTML = '<i></i>LOCAL · 2031';
     })
     .catch((error) => showError(error?.message || String(error)));
 })();
