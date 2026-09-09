@@ -26,7 +26,7 @@
       && window.__DTL_HIROSE_RATE_AT__ !== wrappedRateAt
       ? window.__DTL_HIROSE_RATE_AT__
       : originalRateAt;
-    wrappedRateAt._fallback = fallback;
+    if (fallback && fallback !== wrappedRateAt) wrappedRateAt._fallback = fallback;
     window.__DTL_HIROSE_RATE_AT__ = wrappedRateAt;
   };
 
@@ -112,7 +112,7 @@
         const added = importMissingPublishedRows();
         root.dataset.liveRateRefreshReady = '1';
         root.dataset.liveRateRefreshRecords = String(rows.length);
-        root.dataset.liveRateRefreshEnd = rows.sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.date || '';
+        root.dataset.liveRateRefreshEnd = [...rows].sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.date || '';
         root.dataset.liveRateRefreshImported = String(added);
         delete root.dataset.liveRateRefreshError;
         applyCurrentInputs();
@@ -142,15 +142,11 @@
   };
 
   const bind = () => {
+    // The simplified source selector uses a capture listener with
+    // stopImmediatePropagation. Its persistMode() writes data-rate-source-mode,
+    // so the MutationObserver below is the reliable trigger for Auto refresh.
     const select = document.getElementById('settingRateSource');
-    if (select && !select.dataset.liveRateRefreshBound) {
-      select.dataset.liveRateRefreshBound = '1';
-      select.addEventListener('change', () => {
-        if ((select.value || '') === 'auto') {
-          refresh({ force: true }).catch(() => {});
-        }
-      });
-    }
+    if (select) select.dataset.liveRateRefreshBound = '1';
 
     ['daily', 'quickDaily'].forEach((prefix) => {
       const dateInput = document.getElementById(`${prefix}Date`);
@@ -162,14 +158,21 @@
     });
   };
 
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((mutations) => {
     installRateLookup();
     bind();
+    const switchedToAuto = mutations.some((mutation) =>
+      mutation.attributeName === 'data-rate-source-mode' && root.dataset.rateSourceMode === 'auto'
+    );
+    if (switchedToAuto) {
+      refresh({ force: true }).catch(() => {});
+      return;
+    }
     if (root.dataset.hiroseRateHistoryReady === '1') applyCurrentInputs();
   });
   observer.observe(root, {
     attributes: true,
-    attributeFilter: ['data-hirose-rate-history-ready', 'data-user-prepared-rate-ready']
+    attributeFilter: ['data-hirose-rate-history-ready', 'data-user-prepared-rate-ready', 'data-rate-source-mode']
   });
 
   window.__DTL_REFRESH_HIROSE_RATES__ = (force = true) => refresh({ force: !!force });
