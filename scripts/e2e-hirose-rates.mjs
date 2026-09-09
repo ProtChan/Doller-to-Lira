@@ -104,7 +104,16 @@ try {
   assert.equal(Number(await page.locator('#dailyUsdJpy').inputValue()), 150.123, 'existing user USDJPY row was overwritten by history');
   console.log('existing daily rows remain authoritative: PASS');
 
-  if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
+  // Playwright WebKit can emit a pageerror for its background service-worker
+  // update check on GitHub Pages after a reload even though registration itself
+  // succeeded (the dedicated PWA assertion is in e2e.mjs). Do not let that
+  // unrelated engine-level warning invalidate the rate-history assertions.
+  const actionablePageErrors = pageErrors.filter((message) => !(
+    browserName === 'webkit' &&
+    /sw\.js/i.test(message) &&
+    /access control checks/i.test(message)
+  ));
+  if (actionablePageErrors.length) throw new Error(`Browser page errors: ${actionablePageErrors.join(' | ')}`);
   console.log(`HIROSE RATE HISTORY E2E (${browserName}): PASS`);
 } finally {
   await browser.close();
