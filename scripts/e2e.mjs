@@ -166,9 +166,9 @@ try {
   await page.locator('#closeSettingsBtn').click();
   assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'manual', 'manual swap mode was not restored');
 
-  // Select the date first and let all legacy/date-source listeners settle before typing
-  // the user's manual values. Otherwise a zero-delay source refresh can race a fast E2E fill.
-  await page.locator('#dailyDate').fill('2026-09-08');
+  // Keep the synthetic manual-accounting fixture after the latest published reference date.
+  // This prevents a newly published reference row from becoming the latest snapshot under test.
+  await page.locator('#dailyDate').fill('2026-09-10');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(25);
   assert.equal(await page.locator('#dailySwap').isEditable(), true, 'manual swap input did not become editable');
@@ -179,7 +179,7 @@ try {
 
   const stored = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    const row = state.daily.find((d) => d.date === '2026-09-08');
+    const row = state.daily.find((d) => d.date === '2026-09-10');
     return {
       row,
       swapSnapshot: window.__DTL_SWAP_SNAPSHOT__?.() || null,
@@ -193,6 +193,7 @@ try {
   assert.ok(Math.abs(stored.row.tryJpy - 3.3) < 1e-10, `TRY/JPY was not derived correctly: ${stored.row.tryJpy}`);
   assert.equal(stored.row.swapPerLot, 100.78901, 'swap-per-lot decimal value was not preserved');
   assert.ok(stored.swapSnapshot, 'precise swap snapshot helper is missing');
+  assert.equal(stored.swapSnapshot.date, '2026-09-10', `manual fixture is not the latest snapshot: ${stored.swapSnapshot.date}`);
   assert.ok(Math.abs(stored.swapSnapshot.dailySwap - 123.9704823) < 1e-9, `daily swap lost fractional precision: ${stored.swapSnapshot.dailySwap}`);
   assert.ok(Math.abs(stored.swapSnapshot.cumulativeSwap - 123.9704823) < 1e-9, `cumulative swap lost fractional precision: ${stored.swapSnapshot.cumulativeSwap}`);
   assert.match(stored.swapText, /¥123/, `cumulative swap display should truncate to ¥123: ${stored.swapText}`);
@@ -205,9 +206,8 @@ try {
   console.log('swap 100.78901 x 1.23 -> internal 123.9704823 / display ¥123: PASS');
   console.log('margin 6400/1000 x 1230 units -> 7872 yen: PASS');
 
-  // Add a second day with an FX move; at the 1,000-unit default the phone calendar
-  // remains in full-yen display because these values stay below 10,000 yen.
-  await page.locator('#dailyDate').fill('2026-09-09');
+  // Add a second synthetic day with an FX move.
+  await page.locator('#dailyDate').fill('2026-09-11');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(25);
   await page.locator('#dailyRate').fill('47.0000');
@@ -231,14 +231,14 @@ try {
 
   const mobileCalendarCheck = await page.evaluate(() => {
     const days = [...document.querySelectorAll('#calendarGrid .calendar-day')];
-    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '9');
+    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '11');
     return target ? {
       text: target.innerText,
       main: target.querySelector('.calendar-pnl')?.textContent || '',
       sub: target.querySelector('.calendar-sub')?.textContent || ''
     } : null;
   });
-  assert.ok(mobileCalendarCheck, 'mobile calendar did not render Sep 9');
+  assert.ok(mobileCalendarCheck, 'mobile calendar did not render Sep 11');
   assert.ok(!/NET/.test(mobileCalendarCheck.text), `mobile NET label was not removed: ${mobileCalendarCheck.text}`);
   assert.match(mobileCalendarCheck.main, /¥/, `mobile main calendar value missing: ${mobileCalendarCheck.main}`);
   console.log('Sunday-first calendar + phone compact rendering: PASS');
@@ -247,7 +247,7 @@ try {
   await page.waitForTimeout(50);
   const desktopCalendarCheck = await page.evaluate(() => {
     const days = [...document.querySelectorAll('#calendarGrid .calendar-day')];
-    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '9');
+    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '11');
     return target ? target.innerText : '';
   });
   assert.match(desktopCalendarCheck, /FX/, `desktop calendar should retain FX label: ${desktopCalendarCheck}`);
