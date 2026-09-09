@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dollar-to-lira-pwa-0303';
+const CACHE_NAME = 'dollar-to-lira-pwa-1402';
 const APP_SHELL = [
   './',
   './index.html',
