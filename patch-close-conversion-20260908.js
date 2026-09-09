@@ -3,15 +3,21 @@
 (() => {
   const ensureCloseConversionInput = () => {
     if ($('closeTryJpy')) return $('closeTryJpy');
-    const modalForm = $('closePositionForm')?.querySelector('.modal-form');
+    const form = $('closePositionForm');
+    const modalForm = form?.querySelector('.modal-form') || form?.querySelector('.close-grid') || form;
     if (!modalForm) return null;
     const label = document.createElement('label');
     label.className = 'close-conversion-field';
     label.innerHTML = '円換算レート (TRY/JPY)<input type="number" id="closeTryJpy" step="0.000001" min="0" inputmode="decimal" required /><small>ヒロセの約定履歴に表示される「円換算レート」を入力</small>';
-    modalForm.appendChild(label);
-    const style = document.createElement('style');
-    style.textContent = '.close-conversion-field small{display:block;margin-top:5px;color:var(--muted2);font-size:8px;line-height:1.4;font-weight:500}';
-    document.head.appendChild(style);
+    const footer = form?.querySelector('.modal-footer');
+    if (modalForm === form && footer) footer.before(label);
+    else modalForm.appendChild(label);
+    if (!document.querySelector('style[data-close-conversion]')) {
+      const style = document.createElement('style');
+      style.dataset.closeConversion = '1';
+      style.textContent = '.close-conversion-field small{display:block;margin-top:5px;color:var(--muted2);font-size:8px;line-height:1.4;font-weight:500}';
+      document.head.appendChild(style);
+    }
     return $('closeTryJpy');
   };
 
