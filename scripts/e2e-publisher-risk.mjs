@@ -8,6 +8,7 @@ const browser = await browserType.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
 
 try {
+  // Owner-only publisher remains directly reachable, but must not be linked from the public app.
   const publisher = await context.newPage();
   await publisher.goto(new URL('publish.html', baseUrl).href, { waitUntil: 'domcontentloaded' });
   await publisher.locator('#date').fill('2026-09-08');
@@ -29,7 +30,7 @@ try {
     usdTryAskDayHigh:48.9,
     usdJpyAskDayHigh:155.1
   });
-  console.log(`publisher issue payload (${browserName}): PASS`);
+  console.log(`direct publisher (${browserName}): PASS`);
   await publisher.close();
 
   const page = await context.newPage();
@@ -37,8 +38,9 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '1', { timeout: 15000 });
 
-  // Give the three published high-ASK dates a live short position so stressed maintenance is finite.
+  // Give the published high-ASK dates a live short position so stressed maintenance is finite.
   await page.evaluate(() => {
     const key = 'dollar-to-lira:v1';
     const saved = JSON.parse(localStorage.getItem(key) || '{}');
@@ -60,9 +62,40 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '1', { timeout: 15000 });
 
   await page.locator('[data-tab="daily"]').click();
-  assert.equal(await page.locator('#openRatePublisherBtn').innerText(), 'ヒロセレート配信');
+  assert.equal(await page.locator('#openRatePublisherBtn').count(), 0, 'publisher link leaked into public daily UI');
+  console.log(`publisher hidden from public UI (${browserName}): PASS`);
+
+  // At desktop width, all daily-entry controls must share the same input baseline even
+  // though USD/TRY and Swap have source notes underneath them.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(100);
+  const alignment = await page.evaluate(() => {
+    const rect = (selector) => {
+      const el = document.querySelector(selector);
+      const r = el?.getBoundingClientRect();
+      return r ? { top:r.top, bottom:r.bottom, height:r.height } : null;
+    };
+    return {
+      date:rect('#dailyDate'),
+      rate:rect('#dailyRate'),
+      usdJpy:rect('#dailyUsdJpy'),
+      swap:rect('#dailySwap'),
+      save:rect('#dailyForm > button[type="submit"]'),
+      rateNote:!!document.querySelector('#dailyForm .rate-source-note'),
+      swapNote:!!document.querySelector('#dailyForm .swap-source-note')
+    };
+  });
+  assert.equal(alignment.rateNote, true, 'rate source note missing from daily form');
+  assert.equal(alignment.swapNote, true, 'swap source note missing from daily form');
+  const tops = [alignment.date, alignment.rate, alignment.usdJpy, alignment.swap, alignment.save].map((x) => Number(x?.top));
+  const heights = [alignment.date, alignment.rate, alignment.usdJpy, alignment.swap, alignment.save].map((x) => Number(x?.height));
+  assert.ok(tops.every(Number.isFinite), `daily control geometry missing: ${JSON.stringify(alignment)}`);
+  assert.ok(Math.max(...tops) - Math.min(...tops) <= 1.5, `daily controls are vertically misaligned: ${JSON.stringify(alignment)}`);
+  assert.ok(Math.max(...heights) - Math.min(...heights) <= 1.5, `daily controls have inconsistent heights: ${JSON.stringify(alignment)}`);
+  console.log(`daily input alignment (${browserName}): PASS`);
 
   await page.locator('[data-tab="risk"]').click();
   await page.waitForFunction(() => {
