@@ -23,6 +23,10 @@
     return value > 0 ? { ...row, usdTryAskDayHigh: value } : null;
   };
 
+  const supplementalHighSource = (row) => row?.sourceTimeframe === '4h'
+    ? 'uploaded-hirose-4h-ask-csv'
+    : 'uploaded-hirose-60m-ask-csv';
+
   const installRateHistoryMerge = () => {
     if (wrappedRateAt || typeof window.__DTL_HIROSE_RATE_AT__ !== 'function') return false;
     const baseRateAt = window.__DTL_HIROSE_RATE_AT__;
@@ -35,15 +39,13 @@
       if (!base) return null;
       const extra = highAt(date);
       if (!extra) return { ...base };
-      // Owner-manual publications in the primary feed remain authoritative.
+      const baseHasHigh = Number(base.usdTryAskDayHigh) > 0;
       return {
         ...base,
-        usdTryAskDayHigh: Number(base.usdTryAskDayHigh) > 0
-          ? Number(base.usdTryAskDayHigh)
-          : extra.usdTryAskDayHigh,
-        usdTryAskDayHighSource: Number(base.usdTryAskDayHigh) > 0
-          ? (base.verification || 'primary-feed')
-          : 'uploaded-hirose-60m-ask-csv'
+        usdTryAskDayHigh: baseHasHigh ? Number(base.usdTryAskDayHigh) : extra.usdTryAskDayHigh,
+        usdTryAskDayHighSource: baseHasHigh
+          ? (base.verification || base.usdTryAskDayHighSource || (base.sourceTimeframe === '4h' ? 'uploaded-hirose-4h-ask-csv' : 'primary-feed'))
+          : supplementalHighSource(extra)
       };
     };
 
@@ -54,7 +56,7 @@
         return {
           ...row,
           usdTryAskDayHigh: extra.usdTryAskDayHigh,
-          usdTryAskDayHighSource: 'uploaded-hirose-60m-ask-csv'
+          usdTryAskDayHighSource: supplementalHighSource(extra)
         };
       });
     }
@@ -64,56 +66,59 @@
     return true;
   };
 
+  const combinedHighHistory = () => {
+    const map = new Map(highHistory.map((row) => [row.date, { ...row }]));
+    try {
+      const rates = typeof window.__DTL_HIROSE_RATE_HISTORY__ === 'function'
+        ? window.__DTL_HIROSE_RATE_HISTORY__()
+        : [];
+      rates.forEach((row) => {
+        if (!row?.date || !isWeekday(row.date) || !(Number(row.usdTryAskDayHigh) > 0)) return;
+        map.set(row.date, {
+          ...(map.get(row.date) || {}),
+          date: row.date,
+          usdTryAskDayHigh: Number(row.usdTryAskDayHigh),
+          sourceTimeframe: row.sourceTimeframe || map.get(row.date)?.sourceTimeframe || '60m',
+          sourceBarTime: row.sourceBarTime || map.get(row.date)?.sourceBarTime || null,
+          source: row.usdTryAskDayHighSource || row.verification || map.get(row.date)?.source || 'primary-feed'
+        });
+      });
+    } catch (_) {}
+    return [...map.values()].sort((a,b) => a.date.localeCompare(b.date));
+  };
+
+  const refreshHighDatasetMeta = () => {
+    const combined = combinedHighHistory();
+    root.dataset.askDayHighRecords = String(combined.length);
+    root.dataset.askDayHighStart = combined[0]?.date || '';
+    root.dataset.askDayHighEnd = combined.at(-1)?.date || '';
+  };
+
   const swapFieldsFor = (date) => {
     if (typeof window.__DTL_HIROSE_SWAP_RESOLUTION__ !== 'function') {
-      return {
-        swapPerLot: 0,
-        swapSource: 'hirose-pending',
-        swapPending: true,
-        swapLongPerLot: 0,
-        swapCreditDate: date
-      };
+      return { swapPerLot:0, swapSource:'hirose-pending', swapPending:true, swapLongPerLot:0, swapCreditDate:date };
     }
     const r = window.__DTL_HIROSE_SWAP_RESOLUTION__(date);
     if (r?.status === 'official') {
       return {
-        swapPerLot: Number(r.shortPerLot || 0),
-        swapSource: 'hirose',
-        swapPending: false,
-        swapLongPerLot: Number(r.longPerLot || 0),
-        swapSourceDate: r.sourceDate || '',
-        swapCreditDate: r.creditDate || date,
-        swapSourceDays: Number(r.row?.days || 0),
-        swapSourceUnit: Number(r.row?.unit || 1000),
-        swapSourceSellJpy: Number(r.row?.sellJpy || 0),
-        swapSourceBuyJpy: Number(r.row?.buyJpy || 0)
+        swapPerLot:Number(r.shortPerLot || 0), swapSource:'hirose', swapPending:false,
+        swapLongPerLot:Number(r.longPerLot || 0), swapSourceDate:r.sourceDate || '',
+        swapCreditDate:r.creditDate || date, swapSourceDays:Number(r.row?.days || 0),
+        swapSourceUnit:Number(r.row?.unit || 1000), swapSourceSellJpy:Number(r.row?.sellJpy || 0),
+        swapSourceBuyJpy:Number(r.row?.buyJpy || 0)
       };
     }
     if (r?.status === 'zero') {
       return {
-        swapPerLot: 0,
-        swapSource: 'hirose-zero',
-        swapPending: false,
-        swapLongPerLot: 0,
-        swapSourceDate: r.sourceDate || '',
-        swapCreditDate: r.creditDate || date,
-        swapSourceDays: 0,
-        swapSourceUnit: 1000,
-        swapSourceSellJpy: 0,
-        swapSourceBuyJpy: 0
+        swapPerLot:0, swapSource:'hirose-zero', swapPending:false, swapLongPerLot:0,
+        swapSourceDate:r.sourceDate || '', swapCreditDate:r.creditDate || date,
+        swapSourceDays:0, swapSourceUnit:1000, swapSourceSellJpy:0, swapSourceBuyJpy:0
       };
     }
     return {
-      swapPerLot: 0,
-      swapSource: 'hirose-pending',
-      swapPending: true,
-      swapLongPerLot: 0,
-      swapSourceDate: r?.sourceDate || '',
-      swapCreditDate: r?.creditDate || date,
-      swapSourceDays: 0,
-      swapSourceUnit: 1000,
-      swapSourceSellJpy: 0,
-      swapSourceBuyJpy: 0
+      swapPerLot:0, swapSource:'hirose-pending', swapPending:true, swapLongPerLot:0,
+      swapSourceDate:r?.sourceDate || '', swapCreditDate:r?.creditDate || date,
+      swapSourceDays:0, swapSourceUnit:1000, swapSourceSellJpy:0, swapSourceBuyJpy:0
     };
   };
 
@@ -148,7 +153,7 @@
 
     for (const source of rates) {
       const date = source?.date;
-      if (!date || !isWeekday(date)) continue; // never create Saturday/Sunday daily rows.
+      if (!date || !isWeekday(date)) continue;
       const rate = Number(source.usdTryAskClose23);
       const usdJpy = Number(source.usdJpyAskClose23);
       if (!(rate > 0) || !(usdJpy > 0)) continue;
@@ -160,6 +165,8 @@
         ? Number(source.usdTryAskDayHigh)
         : Number(highAt(date)?.usdTryAskDayHigh || 0);
       const swapFields = swapFieldsFor(date);
+      const sourceTimeframe = source.sourceTimeframe || '60m';
+      const sourceBarTime = source.sourceBarTime || '23:00 JST';
 
       const row = {
         ...(existing || {}),
@@ -169,15 +176,15 @@
         tryJpy: (manualRate ? Number(usdJpyValueV2(existing)) : usdJpy) / (manualRate ? Number(existing.rate) : rate),
         rateSource: manualRate ? existing.rateSource : 'reference-bulk',
         rateSourcePrice: manualRate ? existing.rateSourcePrice : 'ASK',
-        rateSourceTimeframe: manualRate ? existing.rateSourceTimeframe : '60m',
-        rateSourceBarTime: manualRate ? existing.rateSourceBarTime : '23:00 JST'
+        rateSourceTimeframe: manualRate ? existing.rateSourceTimeframe : sourceTimeframe,
+        rateSourceBarTime: manualRate ? existing.rateSourceBarTime : sourceBarTime
       };
 
       if (high > 0) {
         row.usdTryAskDayHigh = high;
         row.usdTryAskDayHighSource = Number(source.usdTryAskDayHigh) > 0
-          ? (source.verification || source.usdTryAskDayHighSource || 'primary-feed')
-          : 'uploaded-hirose-60m-ask-csv';
+          ? (source.verification || source.usdTryAskDayHighSource || (sourceTimeframe === '4h' ? 'uploaded-hirose-4h-ask-csv' : 'primary-feed'))
+          : supplementalHighSource(highAt(date));
         highs += 1;
       }
 
@@ -205,6 +212,7 @@
     root.dataset.referenceDataHighs = String(highs);
     root.dataset.referenceDataSwaps = String(swaps);
     root.dataset.referenceDataRebuiltAt = state.updatedAt;
+    refreshHighDatasetMeta();
 
     if (!silent) toast(`${rows}日分を一括再入力しました · 最大ASK ${highs}日 · Swap ${swaps}日`);
     return { ok:true, rows, highs, swaps };
@@ -232,7 +240,6 @@
     actions.after(note);
   };
 
-  // Reset should not leave the old import-through marker blocking a future restore.
   $('resetAllBtn')?.addEventListener('click', () => {
     setTimeout(() => {
       if (Array.isArray(state.daily) && state.daily.length === 0) {
@@ -242,7 +249,7 @@
     }, 0);
   });
 
-  fetch(`${HIGH_FEED_URL}?v=20260909-2031`, { cache:'no-store' })
+  fetch(`${HIGH_FEED_URL}?v=20260909-2255`, { cache:'no-store' })
     .then((response) => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
@@ -255,9 +262,7 @@
       highByDate = new Map(highHistory.map((row) => [row.date, row]));
       installRateHistoryMerge();
       root.dataset.askDayHighReady = '1';
-      root.dataset.askDayHighRecords = String(highHistory.length);
-      root.dataset.askDayHighStart = highHistory[0]?.date || '';
-      root.dataset.askDayHighEnd = highHistory.at(-1)?.date || '';
+      refreshHighDatasetMeta();
       try { renderRiskFacts(); } catch (_) {}
       if (activeTab === 'risk') requestAnimationFrame(() => { try { renderRiskCharts(); } catch (_) {} });
     })
@@ -270,13 +275,17 @@
   const observer = new MutationObserver((mutations) => {
     if (mutations.some((m) => ['data-hirose-rate-history-ready','data-hirose-history-ready','data-hirose-pending-entries'].includes(m.attributeName))) {
       installRateHistoryMerge();
+      refreshHighDatasetMeta();
     }
   });
   observer.observe(root, { attributes:true, attributeFilter:['data-hirose-rate-history-ready','data-hirose-history-ready','data-hirose-pending-entries'] });
 
   installRebuildUi();
-  window.__DTL_ASK_DAY_HIGH_HISTORY__ = () => highHistory.map((row) => ({ ...row }));
-  window.__DTL_ASK_DAY_HIGH_AT__ = (date) => highAt(date);
+  window.__DTL_ASK_DAY_HIGH_HISTORY__ = () => combinedHighHistory().map((row) => ({ ...row }));
+  window.__DTL_ASK_DAY_HIGH_AT__ = (date) => {
+    const fromCombined = combinedHighHistory().find((row) => row.date === date) || null;
+    return fromCombined ? { ...fromCombined } : null;
+  };
   window.__DTL_REBUILD_REFERENCE_DATA__ = (options) => rebuildReferenceData(options || {});
   root.dataset.referenceDataRebuild = '1';
 })();
