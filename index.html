@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="./styles.css?v=20260906-1140" />
   <link rel="stylesheet" href="./pwa-mobile-20260906.css?v=20260906-1140" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
-  <script src="./runtime-20260906-1140.js?v=20260909-0303" defer></script>
+  <script src="./runtime-20260906-1140.js?v=20260909-1925" defer></script>
 </head>
 <body>
   <div class="shell">
@@ -30,7 +30,7 @@
         <div><h1>ドルとリラ</h1><p>USD/TRY POSITION MANAGER</p></div>
       </div>
       <div class="header-actions">
-        <span class="local-status"><i></i>LOCAL · 0303</span>
+        <span class="local-status"><i></i>LOCAL · 1925</span>
         <button class="text-btn" id="openBackupBtn" type="button">バックアップ</button>
         <button class="settings-btn" id="openSettingsBtn" type="button">設定</button>
       </div>
@@ -196,26 +196,23 @@
       <div class="modal-head"><div><span>BACKUP</span><h2>手動バックアップ</h2></div><button id="closeBackupBtn" type="button">×</button></div>
       <p>データはこのブラウザのlocalStorageだけに保存されています。定期的にJSONを書き出してください。</p>
       <div class="backup-actions">
-        <button class="solid-btn" id="exportJsonBtn" type="button">JSONを保存</button>
-        <button class="outline-btn" id="exportCsvBtn" type="button">日次CSV</button>
-        <label class="outline-btn file-btn">JSONから復元<input type="file" id="importJsonInput" accept="application/json,.json" /></label>
+        <button class="solid-btn" id="exportJsonBtn" type="button">JSONを書き出す</button>
+        <button class="outline-btn" id="exportCsvBtn" type="button">日次CSVを書き出す</button>
+        <label class="file-label">JSONを復元<input type="file" id="importJsonInput" accept="application/json" /></label>
       </div>
-      <div class="backup-meta" id="backupMeta">—</div>
+      <small id="backupMeta">—</small>
     </div>
   </dialog>
 
   <dialog id="closePositionDialog" class="modal">
-    <form method="dialog" class="modal-card" id="closePositionForm">
-      <div class="modal-head"><div><span>CLOSE POSITION</span><h2>ポジション決済</h2></div><button value="cancel">×</button></div>
+    <form class="modal-card" id="closePositionForm">
+      <div class="modal-head"><div><span>CLOSE POSITION</span><h2>決済を記録</h2></div><button type="button" onclick="this.closest('dialog').close()">×</button></div>
       <input type="hidden" id="closePositionId" />
-      <div class="modal-form">
-        <label>決済日<input type="date" id="closeDate" required /></label>
-        <label>決済レート<input type="number" id="closeRate" step="0.0001" min="0" required /></label>
-      </div>
-      <div class="modal-footer"><button class="outline-btn" value="cancel">キャンセル</button><button class="solid-btn" type="submit" value="default">決済を保存</button></div>
+      <div class="close-grid"><label>決済日<input type="date" id="closeDate" required /></label><label>決済レート<input type="number" id="closeRate" step="0.0001" min="0" required /></label></div>
+      <div class="modal-footer"><button type="button" class="outline-btn" onclick="this.closest('dialog').close()">キャンセル</button><button type="submit" class="solid-btn">決済を保存</button></div>
     </form>
   </dialog>
 
-  <div id="toast" class="toast" role="status"></div>
+  <div class="toast" id="toast"></div>
 </body>
 </html>
