@@ -10,6 +10,11 @@ const pageErrors = [];
 page.on('pageerror', (err) => pageErrors.push(err.message));
 
 const numberFromText = (text) => Number(String(text).replace(/[^0-9.\-]/g, ''));
+const addDays = (isoDate, days) => {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
 
 try {
   console.log('CAPITAL HISTORY BROWSER=', browserName);
@@ -20,7 +25,11 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.capitalHistoryAccounting === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
 
-  // Make the latest historical snapshot carry meaningful risk.
+  const latestRateDate = await page.evaluate(() => document.documentElement.dataset.hiroseRateHistoryEnd || '');
+  assert.match(latestRateDate, /^\d{4}-\d{2}-\d{2}$/, `latest rate date unavailable: ${latestRateDate}`);
+  const fundingDate = addDays(latestRateDate, 1);
+
+  // Make the latest published historical snapshot carry meaningful risk.
   await page.locator('[data-tab="positions"]').click();
   await page.locator('#togglePositionFormBtn').click();
   await page.locator('#positionDate').fill('2026-09-01');
@@ -46,9 +55,11 @@ try {
   await page.locator('#capitalHistoryBtn').click();
   await page.waitForFunction(() => document.getElementById('capitalHistoryDialog')?.open === true);
 
-  // Current capital is already the post-deposit 500k. Backfill a 100k deposit dated today
-  // without applying it again, so yesterday reconstructs to 400k.
-  await page.locator('#capitalFlowDate').fill('2026-09-08');
+  // Current capital is already the post-deposit 500k. Put a 100k deposit on the
+  // calendar day immediately after the latest published rate without applying it
+  // again. The latest rate snapshot must therefore reconstruct to 400k even as
+  // the Hirose feed gains new days over time.
+  await page.locator('#capitalFlowDate').fill(fundingDate);
   await page.locator('#capitalFlowDate').dispatchEvent('change');
   await page.locator('#capitalFlowType').selectOption('deposit');
   await page.locator('#capitalFlowAmount').fill('100000');
@@ -58,21 +69,21 @@ try {
   }
   await page.locator('#capitalFlowForm button[type="submit"]').click();
 
-  const capitalState = await page.evaluate(() => {
+  const capitalState = await page.evaluate(({ latestRateDate, fundingDate }) => {
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
     return {
       current: Number(saved.settings?.capital),
       flows: saved.settings?.capitalFlows || [],
-      sep7: window.__DTL_CAPITAL_AS_OF__?.('2026-09-07'),
-      sep8: window.__DTL_CAPITAL_AS_OF__?.('2026-09-08')
+      latest: window.__DTL_CAPITAL_AS_OF__?.(latestRateDate),
+      fundingDay: window.__DTL_CAPITAL_AS_OF__?.(fundingDate)
     };
-  });
+  }, { latestRateDate, fundingDate });
   assert.equal(capitalState.current, 500000, 'backfilled deposit must not double-add to current capital');
   assert.equal(capitalState.flows.length, 1, 'capital flow was not persisted inside settings');
   assert.equal(capitalState.flows[0].amount, 100000, 'deposit amount was not persisted');
   assert.equal(capitalState.flows[0].appliedToCurrent, false, 'backfilled flow unexpectedly changed current capital');
-  assert.equal(capitalState.sep7, 400000, `Sep 7 capital should reconstruct to 400k: ${capitalState.sep7}`);
-  assert.equal(capitalState.sep8, 500000, `Sep 8 current capital should remain 500k: ${capitalState.sep8}`);
+  assert.equal(capitalState.latest, 400000, `${latestRateDate} capital should reconstruct to 400k: ${capitalState.latest}`);
+  assert.equal(capitalState.fundingDay, 500000, `${fundingDate} current capital should remain 500k: ${capitalState.fundingDay}`);
   assert.match(await page.locator('#capitalFlowList').innerText(), /\+¥100,000/, 'capital ledger does not show deposit');
   assert.match(await page.locator('#capitalFlowList').innerText(), /当日元本 ¥500,000/, 'capital ledger does not show reconstructed day capital');
 
@@ -87,10 +98,10 @@ try {
   const afterLc = numberFromText(afterLcText);
   assert.ok(afterMaintenance < beforeMaintenance, `historical maintenance did not fall with lower historical capital: before=${beforeMaintenanceText}, after=${afterMaintenanceText}`);
   assert.ok(afterLc < beforeLc, `short-position historical LC did not move closer after lowering historical capital: before=${beforeLcText}, after=${afterLcText}`);
-  assert.match(await page.locator('#kpiTotalPnlSub').innerText(), /元本 ¥400,000/, 'latest Sep 7 snapshot does not expose reconstructed historical capital');
-  console.log(`historical capital 500k current -> 400k on Sep 7: maintenance ${beforeMaintenanceText} -> ${afterMaintenanceText}, LC ${beforeLcText} -> ${afterLcText}: PASS`);
+  assert.match(await page.locator('#kpiTotalPnlSub').innerText(), /元本 ¥400,000/, `latest ${latestRateDate} snapshot does not expose reconstructed historical capital`);
+  console.log(`historical capital 500k current -> 400k on ${latestRateDate}: maintenance ${beforeMaintenanceText} -> ${afterMaintenanceText}, LC ${beforeLcText} -> ${afterLcText}: PASS`);
 
-  // A past backfill defaults to not changing the current anchor.
+  // A clearly past backfill defaults to not changing the current anchor.
   await page.locator('#openSettingsBtn').click();
   await page.locator('#capitalHistoryBtn').click();
   await page.locator('#capitalFlowDate').fill('2026-09-01');
