@@ -28,7 +28,7 @@
 
     const calendarMoneyMarkup = (value) => `
       <span class="calendar-value-desktop">${money(value)}</span>
-      <span class="calendar-value-mobile">${compactCalendarMoney(value)}</span>`;
+      <span class="calendar-value-mobile calendar-pnl">${compactCalendarMoney(value)}</span>`;
 
     const calendarLabelMarkup = (desktop, mobile) => `
       <span class="calendar-label-desktop">${desktop}</span>
