@@ -1,13 +1,14 @@
-// Final guard for explicit TRY/JPY valuation persistence.
+// Final guard for explicit TRY/JPY valuation persistence and derived accounting.
 // Some Hirose layers are loaded asynchronously and can replace saveDailyFrom after
 // the same-day valuation patch has already wrapped it. Keep the manual conversion
-// authoritative regardless of wrapper load order.
+// authoritative regardless of wrapper load order, including derived PnL/risk metrics.
 (() => {
   const root = document.documentElement;
   if (root.dataset.valuationSaveFinal === '1') return;
 
   const STORE_KEY = 'dollar-to-lira:v1';
-  let installedWrapper = null;
+  let installedSaveWrapper = null;
+  let installedDerivedWrapper = null;
 
   const capture = (prefix) => {
     const date = document.getElementById(`${prefix}Date`)?.value || '';
@@ -42,8 +43,8 @@
     try { renderAll(); } catch (_) {}
   };
 
-  const install = () => {
-    if (typeof saveDailyFrom !== 'function' || saveDailyFrom === installedWrapper) return;
+  const installSaveGuard = () => {
+    if (typeof saveDailyFrom !== 'function' || saveDailyFrom === installedSaveWrapper) return;
     const base = saveDailyFrom;
     const wrapper = function(prefix) {
       const payload = capture(prefix);
@@ -52,7 +53,66 @@
       return result;
     };
     saveDailyFrom = wrapper;
-    installedWrapper = wrapper;
+    installedSaveWrapper = wrapper;
+  };
+
+  const installDerivedGuard = () => {
+    if (typeof derivedDaily !== 'function' || derivedDaily === installedDerivedWrapper) return;
+    const base = derivedDaily;
+    const wrapper = function() {
+      const rows = base();
+      if (!Array.isArray(rows) || !Array.isArray(state?.daily)) return rows;
+
+      let previousFx = 0;
+      let previousTotal = 0;
+      return rows.map((row) => {
+        const saved = state.daily.find((item) => item?.date === row?.date);
+        const explicit = Number(saved?.valuationTryJpy);
+        const hasManual = explicit > 0;
+        const conversionTryJpy = hasManual ? explicit : Number(row.tryJpy);
+        const rate = Number(row.rate);
+        const usdJpy = typeof usdJpyValueV2 === 'function'
+          ? Number(usdJpyValueV2(saved || row))
+          : Number(saved?.usdJpy ?? row.usdJpy);
+        const fxPnl = rate > 0 && conversionTryJpy > 0
+          ? portfolioFx(row.date, rate, conversionTryJpy)
+          : Number(row.fxPnl || 0);
+        const swap = Number(row.swap || 0);
+        const total = fxPnl + swap;
+        const next = {
+          ...row,
+          tryJpy: conversionTryJpy,
+          valuationTryJpy: hasManual ? explicit : undefined,
+          valuationTryJpySource: hasManual ? 'manual' : 'synthetic',
+          fxPnl,
+          dailyFxPnl: fxPnl - previousFx,
+          total,
+          dailyPnl: total - previousTotal
+        };
+
+        try { next.margin = marginRequired(row.date, rate, conversionTryJpy); } catch (_) {}
+        try { next.maintenance = maintenance(row.date, rate, conversionTryJpy); } catch (_) {}
+        try {
+          next.lc = findLcRate(
+            row.date,
+            rate,
+            conversionTryJpy,
+            rate > 0 && conversionTryJpy > 0 ? rate * conversionTryJpy : usdJpy
+          );
+        } catch (_) {}
+
+        previousFx = fxPnl;
+        previousTotal = total;
+        return next;
+      });
+    };
+    derivedDaily = wrapper;
+    installedDerivedWrapper = wrapper;
+  };
+
+  const install = () => {
+    installSaveGuard();
+    installDerivedGuard();
   };
 
   // Capture-phase fallback: even if an async layer replaces saveDailyFrom between
