@@ -37,11 +37,15 @@ jobs:
           node --check patch-reference-data-rebuild-20260909.js
           node --check patch-private-publisher-daily-layout-20260909.js
           node --check patch-live-rate-refresh-20260910.js
+          node --check patch-same-day-swap-valuation-20260911.js
+          node --check patch-same-day-swap-reinforce-20260911.js
           node --check scripts/e2e-hirose-rates.mjs
           node --check scripts/e2e-live-rate-refresh.mjs
           node --check scripts/e2e-close-conversion.mjs
           node --check scripts/e2e-capital-history.mjs
           node --check scripts/e2e-hirose-weekend.mjs
+          node --check scripts/e2e-hirose-pending.mjs
+          node --check scripts/e2e-same-day-valuation.mjs
           node --check scripts/e2e-rate-edit-performance.mjs
           node --check scripts/e2e-publisher-risk.mjs
           node --check scripts/e2e-reference-rebuild.mjs
@@ -66,6 +70,7 @@ jobs:
           BROWSER=chromium node scripts/e2e-close-conversion.mjs
           BROWSER=chromium node scripts/e2e-capital-history.mjs
           BROWSER=chromium node scripts/e2e-hirose-weekend.mjs
+          BROWSER=chromium node scripts/e2e-same-day-valuation.mjs
           BROWSER=chromium node scripts/e2e-rate-edit-performance.mjs
           BROWSER=chromium node scripts/e2e-publisher-risk.mjs
           BROWSER=chromium node scripts/e2e-reference-rebuild.mjs
@@ -82,6 +87,7 @@ jobs:
           BROWSER=webkit node scripts/e2e-close-conversion.mjs
           BROWSER=webkit node scripts/e2e-capital-history.mjs
           BROWSER=webkit node scripts/e2e-hirose-weekend.mjs
+          BROWSER=webkit node scripts/e2e-same-day-valuation.mjs
           BROWSER=webkit node scripts/e2e-rate-edit-performance.mjs
           BROWSER=webkit node scripts/e2e-publisher-risk.mjs
           BROWSER=webkit node scripts/e2e-reference-rebuild.mjs
@@ -109,6 +115,7 @@ jobs:
           node scripts/e2e-close-conversion.mjs
           node scripts/e2e-capital-history.mjs
           node scripts/e2e-hirose-weekend.mjs
+          node scripts/e2e-same-day-valuation.mjs
           node scripts/e2e-rate-edit-performance.mjs
           node scripts/e2e-publisher-risk.mjs
           node scripts/e2e-reference-rebuild.mjs
@@ -125,6 +132,7 @@ jobs:
           node scripts/e2e-close-conversion.mjs
           node scripts/e2e-capital-history.mjs
           node scripts/e2e-hirose-weekend.mjs
+          node scripts/e2e-same-day-valuation.mjs
           node scripts/e2e-rate-edit-performance.mjs
           node scripts/e2e-publisher-risk.mjs
           node scripts/e2e-reference-rebuild.mjs
