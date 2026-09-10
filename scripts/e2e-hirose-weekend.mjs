@@ -73,6 +73,26 @@ try {
   assert.equal(entitlement.sameDayExcluded, false, 'opening calendar date must stay excluded');
   console.log('same-day entitlement / open-exclusive / close-inclusive: PASS');
 
+  // Exact regression from the production screenshot: a 155-lot short opened on
+  // 2026-09-04 must NOT inherit the 2026-09-03 four-day swap (473.94/lot).
+  // The 9/4 broker row itself is zero, so cumulative swap starts at zero and only
+  // 9/7, 9/8 and 9/9 accrue before the 9/10 close.
+  const sep4Position = await page.evaluate(() => {
+    const p = { date:'2026-09-04', closeDate:'2026-09-10', side:'short', lots:155 };
+    const dates = ['2026-09-04','2026-09-07','2026-09-08','2026-09-09','2026-09-10'];
+    return {
+      eligibleSep4: window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__?.(p, '2026-09-04'),
+      helper: dates.map((date) => window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.(p, date)),
+      chartPath: dates.map((date) => positionSwapAsOf(p, date))
+    };
+  });
+  const expectedSep4 = [0, 116.22 * 155, (116.22 + 115.85) * 155, (116.22 + 115.85 + 110.42) * 155, (116.22 + 115.85 + 110.42) * 155];
+  assert.equal(sep4Position.eligibleSep4, false, '9/4 opening date must not earn swap');
+  sep4Position.helper.forEach((value, index) => assert.ok(Math.abs(value - expectedSep4[index]) < 1e-8, `9/4 helper regression at index ${index}: ${value}`));
+  sep4Position.chartPath.forEach((value, index) => assert.ok(Math.abs(value - expectedSep4[index]) < 1e-8, `9/4 chart/summary regression at index ${index}: ${value}`));
+  assert.ok(Math.abs(sep4Position.chartPath.at(-1) - 53085.95) < 1e-8, `9/4 position cumulative swap must be 53,085.95 before 9/10 close, got ${sep4Position.chartPath.at(-1)}`);
+  console.log('9/4 155-lot screenshot regression: PASS');
+
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`HIROSE SAME-DAY E2E (${browserName}): PASS`);
 } finally {
