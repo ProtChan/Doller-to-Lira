@@ -10,6 +10,7 @@
   const SWAP_MODE_KEY = 'dollar-to-lira:swap-mode:v1';
   let installedSaveWrapper = null;
   let installedDerivedWrapper = null;
+  let installedCalendarWrapper = null;
 
   const isHiroseMode = () => root.dataset.swapInputMode === 'hirose' || localStorage.getItem(SWAP_MODE_KEY) === 'hirose';
 
@@ -22,6 +23,27 @@
       manual: input?.dataset.conversionSource === 'manual' && Number.isFinite(value) && value > 0,
       value
     };
+  };
+
+  const applyCalendarSwapBadges = () => {
+    if (typeof derivedDaily !== 'function') return;
+    const rows = new Map((derivedDaily() || []).map((row) => [row.date, row]));
+    document.querySelectorAll('.calendar-day[data-date]').forEach((cell) => {
+      const days = Number(rows.get(cell.dataset.date)?.swapSourceDays || 0);
+      const existing = cell.querySelector('.swap-days-calendar');
+      if (!(days > 1)) {
+        existing?.remove();
+        return;
+      }
+      if (existing) {
+        existing.textContent = `S×${days}`;
+        return;
+      }
+      const badge = document.createElement('span');
+      badge.className = 'swap-days-calendar';
+      badge.textContent = `S×${days}`;
+      cell.appendChild(badge);
+    });
   };
 
   const persist = (payload) => {
@@ -44,6 +66,7 @@
     state.updatedAt = new Date(Date.now() + 1).toISOString();
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
     try { renderAll(); } catch (_) {}
+    try { applyCalendarSwapBadges(); } catch (_) {}
   };
 
   const installSaveGuard = () => {
@@ -147,9 +170,22 @@
     installedDerivedWrapper = wrapper;
   };
 
+  const installCalendarGuard = () => {
+    if (typeof renderCalendar !== 'function' || renderCalendar === installedCalendarWrapper) return;
+    const base = renderCalendar;
+    const wrapper = function(...args) {
+      const result = base.apply(this, args);
+      applyCalendarSwapBadges();
+      return result;
+    };
+    renderCalendar = wrapper;
+    installedCalendarWrapper = wrapper;
+  };
+
   const install = () => {
     installSaveGuard();
     installDerivedGuard();
+    installCalendarGuard();
   };
 
   // Capture-phase fallback: even if an async layer replaces saveDailyFrom between
