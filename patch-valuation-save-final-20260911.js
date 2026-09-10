@@ -7,8 +7,11 @@
   if (root.dataset.valuationSaveFinal === '1') return;
 
   const STORE_KEY = 'dollar-to-lira:v1';
+  const SWAP_MODE_KEY = 'dollar-to-lira:swap-mode:v1';
   let installedSaveWrapper = null;
   let installedDerivedWrapper = null;
+
+  const isHiroseMode = () => root.dataset.swapInputMode === 'hirose' || localStorage.getItem(SWAP_MODE_KEY) === 'hirose';
 
   const capture = (prefix) => {
     const date = document.getElementById(`${prefix}Date`)?.value || '';
@@ -56,6 +59,39 @@
     installedSaveWrapper = wrapper;
   };
 
+  const sameDaySwapFields = (date) => {
+    if (!isHiroseMode() || typeof window.__DTL_HIROSE_SWAP_RESOLUTION__ !== 'function') return null;
+    const resolution = window.__DTL_HIROSE_SWAP_RESOLUTION__(date);
+    if (!resolution) return null;
+    const row = resolution.row || {};
+    if (resolution.status === 'official') {
+      return {
+        swapPerLot: Number(resolution.shortPerLot || 0),
+        swapLongPerLot: Number(resolution.longPerLot || 0),
+        swapSource: 'hirose',
+        swapPending: false,
+        swapSourceDate: date,
+        swapCreditDate: date,
+        swapSourceDays: Number(row.days || 0),
+        swapSourceUnit: Number(row.unit || 1000),
+        swapSourceSellJpy: Number(row.sellJpy || 0),
+        swapSourceBuyJpy: Number(row.buyJpy || 0)
+      };
+    }
+    return {
+      swapPerLot: 0,
+      swapLongPerLot: 0,
+      swapSource: resolution.status === 'pending' ? 'hirose-pending' : 'hirose-zero',
+      swapPending: resolution.status === 'pending',
+      swapSourceDate: date,
+      swapCreditDate: date,
+      swapSourceDays: 0,
+      swapSourceUnit: 1000,
+      swapSourceSellJpy: 0,
+      swapSourceBuyJpy: 0
+    };
+  };
+
   const installDerivedGuard = () => {
     if (typeof derivedDaily !== 'function' || derivedDaily === installedDerivedWrapper) return;
     const base = derivedDaily;
@@ -81,6 +117,7 @@
         const total = fxPnl + swap;
         const next = {
           ...row,
+          ...(sameDaySwapFields(row.date) || {}),
           tryJpy: conversionTryJpy,
           valuationTryJpy: hasManual ? explicit : undefined,
           valuationTryJpySource: hasManual ? 'manual' : 'synthetic',
