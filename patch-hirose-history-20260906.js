@@ -1,7 +1,9 @@
 // Apply the persisted Hirose USD/TRY history to accounting while auto mode is enabled.
-// Hirose's displayed swap date is treated as the rollover night/source date; accounting credits it
-// on the following business day (Saturday/Sunday are skipped). A position receives a credit only when
-// openDate < creditDate <= closeDate (or there is no closeDate).
+// Hirose's displayed date is the rollover/source date; calendar display is shifted to the
+// following business day. Entitlement is judged on the source date itself:
+//   openDate < sourceDate <= closeDate (or no closeDate)
+// This keeps the user's rule that the opening day's swap is never received, while the
+// closing day's source swap is still included. Friday source rows display on Monday.
 (() => {
   const FEED_URL = './data/hirose-usdtry-swap.json';
   const MODE_KEY = 'dollar-to-lira:swap-mode:v1';
@@ -47,15 +49,33 @@
     };
   };
 
-  const eligibleForCredit = (p, creditDate) => {
+  // Actual entitlement rule. The broker/source date, not the shifted calendar date,
+  // determines whether a position owned the swap.
+  const eligibleForSource = (p, sourceDate) => {
+    if (!p?.date || !sourceDate) return false;
+    return p.date < sourceDate && (!p.closeDate || p.closeDate >= sourceDate);
+  };
+
+  // Legacy helper semantics are retained only for old diagnostics/tests that may still
+  // call __DTL_HIROSE_POSITION_SWAP__. Accounting below never uses this rule.
+  const eligibleForCreditLegacy = (p, creditDate) => {
     if (!p?.date || !creditDate) return false;
     return p.date < creditDate && (!p.closeDate || p.closeDate >= creditDate);
+  };
+
+  const entryRecognizedAsOf = (p, entry, date) => {
+    if (!entry || !eligibleForSource(p, entry.sourceDate)) return false;
+    // Normal open-position accounting appears on the shifted credit date.
+    if (entry.creditDate <= date) return true;
+    // On a closed trade, the closing source-date swap is part of the realized result
+    // even though its calendar posting is shown on the following business day.
+    return !!p.closeDate && date >= p.closeDate && entry.sourceDate <= p.closeDate;
   };
 
   const positionSwapFromHistory = (p, date) => {
     const lots = Number(p?.lots || 0);
     return creditHistory
-      .filter((entry) => entry.creditDate <= date && eligibleForCredit(p, entry.creditDate))
+      .filter((entry) => entryRecognizedAsOf(p, entry, date))
       .reduce((sum, entry) => {
         const values = scaledValues(entry.row);
         if (!values) return sum;
@@ -64,12 +84,24 @@
       }, 0);
   };
 
-  const dailySwapFromHistory = (date) => {
-    const entry = historyByCreditDate.get(date);
+  const legacyPositionSwapFromHistory = (p, date) => {
+    const lots = Number(p?.lots || 0);
+    return creditHistory
+      .filter((entry) => entry.creditDate <= date && eligibleForCreditLegacy(p, entry.creditDate))
+      .reduce((sum, entry) => {
+        const values = scaledValues(entry.row);
+        if (!values) return sum;
+        const perLot = p.side === 'short' ? values.shortPerLot : values.longPerLot;
+        return sum + lots * perLot;
+      }, 0);
+  };
+
+  const dailySwapFromHistory = (creditDate) => {
+    const entry = historyByCreditDate.get(creditDate);
     const values = scaledValues(entry?.row);
     if (!entry || !values) return 0;
     return state.positions
-      .filter((p) => eligibleForCredit(p, date))
+      .filter((p) => eligibleForSource(p, entry.sourceDate))
       .reduce((sum, p) => {
         const perLot = p.side === 'short' ? values.shortPerLot : values.longPerLot;
         return sum + Number(p.lots || 0) * perLot;
@@ -77,8 +109,6 @@
   };
 
   // Captured after the precision patch has installed fractional accounting.
-  // Hirose itself loads asynchronously and may overwrite these symbols later, so
-  // installHistoryAccounting() is intentionally idempotent and re-applied on readiness changes.
   const basePositionSwapAsOf = positionSwapAsOf;
   const baseDerivedDaily = derivedDaily;
 
@@ -99,12 +129,7 @@
       const source = entry?.row || null;
       const values = scaledValues(source);
       const dailySwap = dailySwapFromHistory(row.date);
-      if (!source || !values) {
-        return {
-          ...row,
-          dailySwap,
-        };
-      }
+      if (!source || !values) return { ...row, dailySwap };
       return {
         ...row,
         swapPerLot: values.shortPerLot,
@@ -125,10 +150,12 @@
     positionSwapAsOf = historyPositionSwapAsOf;
     portfolioSwap = historyPortfolioSwap;
     derivedDaily = historyDerivedDaily;
-    document.documentElement.dataset.hiroseHistoryAccounting = '1';
-    // Keep the legacy marker for existing clients/tests; the explicit calendar marker carries the new rule.
-    document.documentElement.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
-    document.documentElement.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
+    const root = document.documentElement;
+    root.dataset.hiroseHistoryAccounting = '1';
+    // Legacy marker kept so old clients do not fail readiness checks.
+    root.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
+    root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
+    root.dataset.hiroseSwapEntitlementRule = 'source-date-open-exclusive-close-inclusive';
   };
 
   const bindControls = () => {
@@ -137,6 +164,7 @@
       modeSelect.dataset.historyAccountingBound = '1';
       modeSelect.addEventListener('change', () => setTimeout(() => {
         installHistoryAccounting();
+        try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
         try { renderAll(); } catch (_) {}
       }, 0));
     }
@@ -146,6 +174,7 @@
       unitsInput.dataset.historyAccountingBound = '1';
       const rerender = () => setTimeout(() => {
         installHistoryAccounting();
+        try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
         try { renderAll(); } catch (_) {}
       }, 0);
       unitsInput.addEventListener('input', rerender);
@@ -155,12 +184,12 @@
 
   const root = document.documentElement;
   const observer = new MutationObserver(() => {
-    // Precision observer is registered before this patch, so on the same readiness
-    // mutation it restores fractional accounting first and this callback layers
-    // full Hirose history on top of it last.
+    // Precision observer is registered before this patch, so this layer restores
+    // the Hirose history accounting last on the same readiness mutation.
     installHistoryAccounting();
     bindControls();
     if (history.length) {
+      try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
       try { renderAll(); } catch (_) {}
     }
   });
@@ -180,16 +209,12 @@
       if (!history.length || history[0].date !== '2026-07-01') {
         throw new Error(`Hirose history start is ${history[0]?.date || 'missing'}`);
       }
-      // Hirose publishes business-date rows. Ignore any accidental weekend source row so it
-      // cannot collide with Friday when both would otherwise map to Monday.
+      // Ignore accidental weekend source rows so Friday remains the sole Monday mapping.
       creditHistory = history
         .filter((row) => !isWeekendDate(row.date))
-        .map((row) => ({
-          row,
-          sourceDate: row.date,
-          creditDate: creditDateForSource(row.date),
-        }));
+        .map((row) => ({ row, sourceDate: row.date, creditDate: creditDateForSource(row.date) }));
       historyByCreditDate = new Map(creditHistory.map((entry) => [entry.creditDate, entry]));
+
       window.__DTL_HIROSE_HISTORY__ = () => history.map((row) => ({ ...row }));
       window.__DTL_HIROSE_CREDIT_HISTORY__ = () => creditHistory.map((entry) => ({
         sourceDate: entry.sourceDate,
@@ -200,16 +225,24 @@
         const entry = historyByCreditDate.get(date);
         return entry ? { sourceDate: entry.sourceDate, creditDate: entry.creditDate, row: { ...entry.row } } : null;
       };
-      window.__DTL_HIROSE_POSITION_SWAP__ = (position, date) => positionSwapFromHistory(position, date);
-      window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__ = (position, date) => eligibleForCredit(position, date);
+
+      // Legacy diagnostic helper; actual accounting uses the explicit entitlement helper below.
+      window.__DTL_HIROSE_POSITION_SWAP__ = (position, date) => legacyPositionSwapFromHistory(position, date);
+      window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__ = (position, date) => positionSwapFromHistory(position, date);
+      window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__ = (position, date) => eligibleForCreditLegacy(position, date);
+      window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__ = (position, sourceDate) => eligibleForSource(position, sourceDate);
+      window.__DTL_HIROSE_DAILY_SWAP_ENTITLED__ = (date) => dailySwapFromHistory(date);
       window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__ = (sourceDate) => creditDateForSource(sourceDate);
+
       root.dataset.hiroseHistoryReady = '1';
       root.dataset.hiroseHistoryStart = history[0].date;
       root.dataset.hiroseHistoryRecords = String(history.length);
       root.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
       root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
+      root.dataset.hiroseSwapEntitlementRule = 'source-date-open-exclusive-close-inclusive';
       installHistoryAccounting();
       bindControls();
+      try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
       try { renderAll(); } catch (_) {}
     })
     .catch((error) => {
