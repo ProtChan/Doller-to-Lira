@@ -25,6 +25,42 @@
     };
   };
 
+  const resetToSynthetic = (prefix) => {
+    const date = document.getElementById(`${prefix}Date`)?.value || '';
+    const input = document.getElementById(`${prefix}ValuationTryJpy`);
+    if (!input || !date) return;
+
+    let rate = Number(document.getElementById(`${prefix}Rate`)?.value);
+    let usdJpy = Number(document.getElementById(`${prefix}UsdJpy`)?.value);
+    const saved = Array.isArray(state?.daily) ? state.daily.find((row) => row?.date === date) : null;
+    if (!(rate > 0)) rate = Number(saved?.rate);
+    if (!(usdJpy > 0)) usdJpy = Number(saved?.usdJpy);
+
+    if (!(rate > 0) || !(usdJpy > 0)) {
+      try {
+        const published = typeof window.__DTL_HIROSE_RATE_AT__ === 'function'
+          ? window.__DTL_HIROSE_RATE_AT__(date)
+          : null;
+        if (!(rate > 0)) rate = Number(published?.usdTryAskClose23);
+        if (!(usdJpy > 0)) usdJpy = Number(published?.usdJpyAskClose23);
+      } catch (_) {}
+    }
+
+    if (rate > 0 && usdJpy > 0) {
+      input.value = String(Number((usdJpy / rate).toFixed(6)));
+      input.dataset.conversionSource = 'synthetic';
+    }
+  };
+
+  const bindSyntheticResetGuards = () => {
+    document.querySelectorAll('[data-synthetic-conversion]').forEach((button) => {
+      if (button.dataset.valuationSaveFinalBound) return;
+      button.dataset.valuationSaveFinalBound = '1';
+      const prefix = button.dataset.syntheticConversion;
+      button.addEventListener('click', () => resetToSynthetic(prefix));
+    });
+  };
+
   const applyCalendarSwapBadges = () => {
     if (typeof derivedDaily !== 'function') return;
     const rows = new Map((derivedDaily() || []).map((row) => [row.date, row]));
@@ -186,6 +222,7 @@
     installSaveGuard();
     installDerivedGuard();
     installCalendarGuard();
+    bindSyntheticResetGuards();
   };
 
   // Capture-phase fallback: even if an async layer replaces saveDailyFrom between
