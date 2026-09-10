@@ -1,9 +1,9 @@
 // Hirose swap accounting convention:
-// - The broker's displayed date is the rollover night/source date.
-// - The site credits that amount on the following business day; Saturday/Sunday stay at 0.
-// - Positions opened on the credit date do not receive it; positions closed on the
-//   credit date do receive it (handled by the history accounting layer).
-// Missing future source data remains provisional 0 JPY and upgrades automatically.
+// - The broker-published table date is the site's accounting/credit date.
+// - Multi-day rows (3x/4x/etc.) stay on that published date; weekends without a row are 0.
+// - Positions opened on the published date do not receive that day's row; positions closed
+//   on the published date do receive it (handled by the history accounting layer).
+// Missing future table data remains provisional 0 JPY and upgrades automatically.
 (() => {
   const MODE_KEY = 'dollar-to-lira:swap-mode:v1';
   const isAuto = () => localStorage.getItem(MODE_KEY) === 'hirose';
@@ -21,15 +21,9 @@
     return day === 0 || day === 6;
   };
 
-  const previousBusinessDate = (creditDate) => {
-    const d = parseIsoDate(creditDate);
-    if (!d) return '';
-    d.setUTCDate(d.getUTCDate() - 1);
-    while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
-    return d.toISOString().slice(0, 10);
-  };
-
-  const sourceDateForCredit = (creditDate) => previousBusinessDate(creditDate);
+  // Retained name for compatibility with older callers. The source is now the
+  // selected broker table date itself; there is no next-business-day shift.
+  const sourceDateForCredit = (creditDate) => creditDate;
 
   const historyRows = () => {
     try {
@@ -42,17 +36,18 @@
   };
 
   const resolutionForCreditDate = (creditDate) => {
-    if (isWeekend(creditDate)) {
-      return { status: 'zero', creditDate, sourceDate: '', row: null, weekend: true };
-    }
-
     const sourceDate = sourceDateForCredit(creditDate);
     const rows = historyRows();
     const row = rows.find((item) => item?.date === sourceDate) || null;
     if (row) return { status: 'official', creditDate, sourceDate, row, weekend: false };
 
+    // An unpublished weekend is a confirmed zero. If a broker exceptionally publishes
+    // a weekend row, the exact-row branch above still wins.
+    if (isWeekend(creditDate)) {
+      return { status: 'zero', creditDate, sourceDate, row: null, weekend: true };
+    }
+
     const latestSourceDate = rows.length ? String(rows[rows.length - 1]?.date || '') : '';
-    // A missing business source date inside already-published history is a confirmed zero/no posting day.
     if (latestSourceDate && sourceDate <= latestSourceDate) {
       return { status: 'zero', creditDate, sourceDate, row: null, weekend: false };
     }
@@ -96,7 +91,8 @@
     if (official.status === 'official') {
       input.value = String(official.shortPerLot);
       if (note) {
-        note.textContent = `ヒロセ ${official.sourceDate}表記 → ${date}計上 · ${official.row.days}日分 · 1,000通貨 ${official.row.sellJpy}円 → ${Number(state.settings.unitsPerLot).toLocaleString()}通貨 ${official.shortPerLot.toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
+        const sourceUnit = Number(official.row.unit || 1000);
+        note.textContent = `ヒロセ ${date}付与 · ${official.row.days}日分 · ${sourceUnit.toLocaleString()}通貨 ${official.row.sellJpy}円 → ${Number(state.settings.unitsPerLot).toLocaleString()}通貨 ${official.shortPerLot.toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
       }
       return;
     }
@@ -106,14 +102,14 @@
       input.dataset.hiroseZero = '1';
       if (note) {
         note.textContent = official.weekend
-          ? `${date}は週末のためSwap計上 0円`
-          : `${official.sourceDate}表記なし → ${date}計上 0円`;
+          ? `${date}は週末のためSwap 0円`
+          : `${date}はヒロセ表記なし → Swap 0円`;
       }
       return;
     }
 
     input.dataset.hirosePending = '1';
-    if (note) note.textContent = `${official.sourceDate}表記 未確定 → ${date}は計算上0円（取得後に自動反映）`;
+    if (note) note.textContent = `${date}分 未確定 → 現在0円（取得後に同日へ自動反映）`;
   };
 
   const sourceFieldsFor = (resolution) => {
@@ -213,7 +209,7 @@
       ? ' · Swap未確定'
       : resolution.status === 'zero'
         ? ' · Swap 0円'
-        : ` · ${resolution.sourceDate}表記分`;
+        : ` · ${resolution.sourceDate}付与分`;
     saveState(`${idx >= 0 ? '日次データを更新しました' : '日次データを保存しました'}${suffix}`);
     setTimeout(() => syncPendingInput(prefix), 0);
     return true;
@@ -263,8 +259,9 @@
     syncPendingInput('daily');
     syncPendingInput('quickDaily');
     const status = $('hiroseFeedStatus');
-    if (status && !status.textContent.includes('翌営業日計上')) status.textContent += ' · 翌営業日計上';
-    root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
+    if (status && !status.textContent.includes('表記日計上')) status.textContent += ' · 表記日計上';
+    root.dataset.hiroseSwapCreditRule = 'same-day-table-date';
+    root.dataset.hiroseSwapCalendarRule = 'same-day-table-date';
     if (changed) {
       try { renderAll(); } catch (_) {}
     } else {
@@ -295,7 +292,6 @@
 
   refresh();
   root.dataset.hirosePendingEntries = '1';
-  // Legacy marker retained for backwards compatibility; see hiroseSwapCalendarRule for weekend behavior.
-  root.dataset.hiroseSwapCreditRule = 'next-day-open-before-close-inclusive';
-  root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
+  root.dataset.hiroseSwapCreditRule = 'same-day-table-date';
+  root.dataset.hiroseSwapCalendarRule = 'same-day-table-date';
 })();
