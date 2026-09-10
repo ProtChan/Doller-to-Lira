@@ -38,7 +38,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '2', { timeout: 15000 });
 
   // Give the published high-ASK dates a live short position so stressed maintenance is finite.
   await page.evaluate(() => {
@@ -62,7 +62,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '2', { timeout: 15000 });
 
   await page.locator('[data-tab="daily"]').click();
   assert.equal(await page.locator('#openRatePublisherBtn').count(), 0, 'publisher link leaked into public daily UI');
