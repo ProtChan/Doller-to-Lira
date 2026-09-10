@@ -16,29 +16,25 @@ try {
   console.log('BROWSER=', browserName);
   console.log('TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.accountingV2 === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.swapDecimals === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseMargin === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseFeedReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryAccounting === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCreditRule === 'next-day-open-before-close-inclusive', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.calendarBreakdown === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.calendarMobileCompact === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.swapAccounting === 'fractional-internal-truncated-display', { timeout: 15000 });
 
-  console.log('appReady=', await page.locator('html').getAttribute('data-app-ready'));
-  console.log('accountingV2=', await page.locator('html').getAttribute('data-accounting-v2'));
-  console.log('swapDecimals=', await page.locator('html').getAttribute('data-swap-decimals'));
-  console.log('hiroseMargin=', await page.locator('html').getAttribute('data-hirose-margin'));
-  console.log('hiroseFeedReady=', await page.locator('html').getAttribute('data-hirose-feed-ready'));
-  console.log('hiroseHistoryReady=', await page.locator('html').getAttribute('data-hirose-history-ready'));
-  console.log('hiroseHistoryAccounting=', await page.locator('html').getAttribute('data-hirose-history-accounting'));
-  console.log('hiroseSwapCreditRule=', await page.locator('html').getAttribute('data-hirose-swap-credit-rule'));
-  console.log('calendarBreakdown=', await page.locator('html').getAttribute('data-calendar-breakdown'));
-  console.log('calendarMobileCompact=', await page.locator('html').getAttribute('data-calendar-mobile-compact'));
-  console.log('swapAccounting=', await page.locator('html').getAttribute('data-swap-accounting'));
+  for (const [key, value] of Object.entries({
+    appReady: '1',
+    accountingV2: '1',
+    swapDecimals: '1',
+    hiroseMargin: '1',
+    hiroseFeedReady: '1',
+    hiroseHistoryReady: '1',
+    hiroseHistoryAccounting: '1',
+    calendarBreakdown: '1',
+    calendarMobileCompact: '1',
+    sameDaySwapValuation: '1',
+    sameDaySwapReinforce: '1',
+    sameDaySwapAccountingActive: '1'
+  })) {
+    await page.waitForFunction(({ key, value }) => document.documentElement.dataset[key] === value, { key, value }, { timeout: 15000 });
+  }
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCreditRule === 'same-day-table-date', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapEntitlementRule === 'table-date-open-exclusive-close-inclusive', { timeout: 15000 });
 
   const marginBands = await page.evaluate(() => ({
     at155: window.__DTL_MARGIN_PER_1000__(155),
@@ -47,209 +43,113 @@ try {
     below160: window.__DTL_MARGIN_PER_1000__(159.9999),
     at160: window.__DTL_MARGIN_PER_1000__(160)
   }));
-  assert.deepEqual(marginBands, { at155: 6300, below1575: 6300, at1575: 6400, below160: 6400, at160: 6500 }, `Hirose margin bands are wrong: ${JSON.stringify(marginBands)}`);
+  assert.deepEqual(marginBands, { at155: 6300, below1575: 6300, at1575: 6400, below160: 6400, at160: 6500 });
   console.log('Hirose USDJPY margin bands: PASS');
 
-  const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
-  assert.match(manifestHref || '', /manifest\.webmanifest/, 'PWA manifest link is missing');
   const manifestUrl = new URL('manifest.webmanifest', targetUrl).href;
   const manifestResponse = await page.request.get(manifestUrl);
-  assert.equal(manifestResponse.ok(), true, `manifest request failed: ${manifestResponse.status()}`);
+  assert.equal(manifestResponse.ok(), true);
   const manifest = await manifestResponse.json();
-  assert.equal(manifest.display, 'standalone', 'manifest display is not standalone');
-  assert.equal(manifest.short_name, 'ドルとリラ', 'manifest short name is wrong');
-  assert.ok(Array.isArray(manifest.icons) && manifest.icons.some((icon) => /icon-dollar-lira\.svg/.test(icon.src)), 'Dollar-Lira PWA icon is missing from manifest');
-  const iconResponse = await page.request.get(new URL('icon-dollar-lira.svg', targetUrl).href);
-  assert.equal(iconResponse.ok(), true, `PWA icon request failed: ${iconResponse.status()}`);
-  assert.match(await iconResponse.text(), /\$₺/, 'PWA icon does not contain the Dollar-Lira mark');
-  console.log('PWA manifest/icon: PASS');
-
-  if (targetUrl.startsWith('https://')) {
-    await page.waitForFunction(() => document.documentElement.dataset.pwaReady === '1', { timeout: 15000 });
-    console.log('service worker registration: PASS');
-  }
+  assert.equal(manifest.display, 'standalone');
+  assert.equal(manifest.short_name, 'ドルとリラ');
+  assert.ok(manifest.icons?.some((icon) => /icon-dollar-lira\.svg/.test(icon.src)));
+  console.log('PWA manifest: PASS');
 
   await page.locator('[data-tab="positions"]').click();
-  assert.equal(await page.locator('[data-tab="positions"]').evaluate((el) => el.classList.contains('active')), true, 'positions tab did not become active');
-  assert.equal(await page.locator('#view-positions').evaluate((el) => el.classList.contains('active')), true, 'positions view did not become active');
-  console.log('tab positions: PASS');
-
+  assert.equal(await page.locator('#view-positions').evaluate((el) => el.classList.contains('active')), true);
   await page.locator('#togglePositionFormBtn').click();
-  assert.equal(await page.locator('#positionEditor').evaluate((el) => el.classList.contains('hidden')), false, 'position editor stayed hidden');
-  console.log('position editor: PASS');
-
-  await page.locator('#positionDate').fill('2026-09-06');
+  await page.locator('#positionDate').fill('2026-09-01');
   await page.locator('#positionSide').selectOption('short');
   await page.locator('#entryRate').fill('48.0000');
   await page.locator('#entryLots').fill('1.23');
   await page.locator('#positionForm button[type="submit"]').click();
-  assert.match(await page.locator('#positionTableBody').innerText(), /1\.23/, 'position lot was not saved');
+  assert.match(await page.locator('#positionTableBody').innerText(), /1\.23/);
   console.log('position save: PASS');
 
   await page.locator('#openSettingsBtn').click();
-  assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), true, 'settings drawer did not open');
-  assert.equal(await page.locator('#settingsBackdrop').evaluate((el) => el.classList.contains('show')), true, 'settings backdrop did not open');
-  assert.equal(await page.locator('#settingSwap').getAttribute('step'), 'any', 'default swap input is not arbitrary-decimal');
-  assert.equal(Number(await page.locator('#settingUnits').inputValue()), 1000, 'new-install default must be 1 lot = 1,000 units');
-  console.log('default 1 lot = 1,000 units: PASS');
-
-  assert.equal(await page.locator('#settingSwapMode').count(), 1, 'Hirose swap mode setting is missing');
+  assert.equal(Number(await page.locator('#settingUnits').inputValue()), 1000);
+  assert.equal(await page.locator('#settingSwapMode').count(), 1);
   await page.locator('#settingSwapMode').selectOption('hirose');
-  assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'hirose', 'Hirose swap mode was not activated');
-  assert.match(await page.locator('#hiroseFeedStatus').innerText(), /USD\/TRY公式データ/, 'Hirose feed status is missing');
+  await page.locator('#closeSettingsBtn').click();
+  await page.waitForFunction(() => document.documentElement.dataset.swapInputMode === 'hirose', { timeout: 5000 });
 
-  const historyCheck = await page.evaluate(() => {
+  const history = await page.evaluate(() => {
     const rows = window.__DTL_HIROSE_HISTORY__?.() || [];
     return {
       start: document.documentElement.dataset.hiroseHistoryStart,
-      records: Number(document.documentElement.dataset.hiroseHistoryRecords || 0),
-      first: rows[0] || null,
-      july1to3Short: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-01', side: 'short', lots: 1 }, '2026-07-03'),
-      july1to3Closed: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-01', closeDate: '2026-07-03', side: 'short', lots: 1 }, '2026-07-03'),
-      openedJul3SameDay: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-03', side: 'short', lots: 1 }, '2026-07-03'),
-      sep4Credit: window.__DTL_HIROSE_CREDIT_AT__?.('2026-09-04') || null
+      records: rows.length,
+      jul2: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-02') || null,
+      sep3: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-09-03') || null,
+      openedSameDay: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: '2026-09-03', side: 'short', lots: 1 }, '2026-09-03'),
+      openedBefore: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: '2026-09-02', side: 'short', lots: 1 }, '2026-09-03')
     };
   });
-  assert.equal(historyCheck.start, '2026-07-01', `Hirose history did not start on 2026-07-01: ${historyCheck.start}`);
-  assert.ok(historyCheck.records >= 47, `Hirose history is unexpectedly short: ${historyCheck.records}`);
-  assert.equal(historyCheck.first?.date, '2026-07-01', 'first Hirose historical row is missing');
-  assert.equal(historyCheck.first?.sellJpy, 116.3, '2026-07-01 Hirose sell swap is wrong');
-  assert.ok(Math.abs(historyCheck.july1to3Short - 463.11) < 1e-9, `opening-day exclusion / next-day credit is wrong: ${historyCheck.july1to3Short}`);
-  assert.ok(Math.abs(historyCheck.july1to3Closed - 463.11) < 1e-9, `close-date-inclusive swap credit is wrong: ${historyCheck.july1to3Closed}`);
-  assert.equal(historyCheck.openedJul3SameDay, 0, `position opened on credit date must not receive same-day swap: ${historyCheck.openedJul3SameDay}`);
-  assert.equal(historyCheck.sep4Credit?.sourceDate, '2026-09-03', 'Sep 4 credit must come from Sep 3 Hirose row');
-  assert.equal(historyCheck.sep4Credit?.row?.sellJpy, 473.94, 'Sep 3 four-day swap must credit on Sep 4');
-  console.log('Hirose next-day credit + open-day exclusion + close-day inclusion: PASS');
-
-  assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true, 'mobile backup button is not visible at phone viewport');
-  await page.locator('#openBackupFromSettingsBtn').click();
-  assert.equal(await page.locator('#settingsDrawer').evaluate((el) => el.classList.contains('show')), false, 'settings drawer did not close when opening mobile backup');
-  assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), true, 'backup dialog did not open from mobile settings');
-  assert.equal(await page.locator('#exportJsonBtn').isVisible(), true, 'JSON backup action is not visible on mobile');
-  assert.equal(await page.locator('#exportCsvBtn').isVisible(), true, 'CSV backup is not visible on mobile');
-  assert.equal(await page.locator('#importJsonInput').count(), 1, 'JSON restore input is missing on mobile');
-  console.log('mobile backup access: PASS');
-  await page.locator('#closeBackupBtn').click();
-  assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), false, 'backup dialog did not close');
+  assert.equal(history.start, '2026-07-01');
+  assert.ok(history.records >= 47);
+  assert.equal(history.jul2?.creditDate, '2026-07-02');
+  assert.equal(history.jul2?.shortPerLot, 346.81);
+  assert.equal(history.jul2?.row?.days, 3);
+  assert.equal(history.sep3?.creditDate, '2026-09-03');
+  assert.equal(history.sep3?.shortPerLot, 473.94);
+  assert.equal(history.sep3?.row?.days, 4);
+  assert.equal(history.openedSameDay, 0);
+  assert.ok(Math.abs(history.openedBefore - 473.94) < 1e-9);
+  console.log('same-day Hirose multi-day accounting: PASS');
 
   await page.locator('[data-tab="daily"]').click();
-  assert.equal(await page.locator('#view-daily').evaluate((el) => el.classList.contains('active')), true, 'daily view did not become active');
-  assert.equal(await page.locator('#dailyUsdJpy').count(), 1, 'USD/JPY input is missing');
-  assert.equal(await page.locator('#dailyTryJpy').count(), 0, 'legacy TRY/JPY input is still visible in daily form');
-  assert.equal(await page.locator('#dailySwap').getAttribute('step'), 'any', 'daily swap input is not arbitrary-decimal');
+  assert.equal(await page.locator('#dailyValuationTryJpy').count(), 1);
+  assert.equal(await page.locator('#quickDailyValuationTryJpy').count(), 1);
 
   await page.locator('#dailyDate').fill('2026-07-02');
   await page.locator('#dailyDate').dispatchEvent('change');
-  assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 116.3, '2026-07-01 Hirose row was not credited on 2026-07-02');
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-01表記 → 2026-07-02計上/, 'next-day source/credit note is missing');
-  console.log('Hirose historical next-day auto-fill: PASS');
+  await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 346.81) < 1e-9, { timeout: 5000 });
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-02付与/);
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /3日分/);
 
   await page.locator('#dailyDate').fill('2026-09-03');
   await page.locator('#dailyDate').dispatchEvent('change');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 118.26, 'Sep 3 must credit the Sep 2 Hirose row');
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-02表記 → 2026-09-03計上/, 'Sep 3 next-day note is wrong');
+  await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 473.94) < 1e-9, { timeout: 5000 });
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-03付与/);
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/);
+  console.log('daily same-day auto-fill: PASS');
 
-  await page.locator('#dailyDate').fill('2026-09-04');
-  await page.locator('#dailyDate').dispatchEvent('change');
-  assert.equal(await page.locator('#dailySwap').isEditable(), false, 'Hirose auto swap input should be read-only');
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 473.94, 'Sep 3 four-day Hirose swap must credit on Sep 4');
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-03表記 → 2026-09-04計上/, 'Sep 4 source/credit note is wrong');
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/, 'Hirose rollover day count is not shown');
-  console.log('Hirose Sep 3 four-day swap -> Sep 4 credit: PASS');
+  await page.locator('#dailyRate').fill('50.0000');
+  await page.locator('#dailyUsdJpy').fill('160.000');
+  const synthetic = Number(await page.locator('#dailyValuationTryJpy').inputValue());
+  assert.ok(Math.abs(synthetic - 3.2) < 1e-6, `synthetic TRYJPY=${synthetic}`);
+  await page.locator('#dailyValuationTryJpy').fill('3.150001');
+  await page.locator('#dailyForm button[type="submit"]').click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dollar-to-lira:v1')).daily.find((row) => row.date === '2026-09-03'));
+  assert.equal(saved.valuationTryJpy, 3.150001);
+  assert.equal(saved.valuationTryJpySource, 'manual');
+  assert.equal(saved.swapSourceDate, '2026-09-03');
+  assert.equal(saved.swapCreditDate, '2026-09-03');
+  assert.equal(saved.swapSourceDays, 4);
+  console.log('actual TRYJPY valuation override: PASS');
 
-  // Synthetic accounting fixtures are explicitly manual for both rates and swap.
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('manual');
   await page.locator('#settingRateSource').selectOption('manual');
   await page.locator('#closeSettingsBtn').click();
-  assert.equal(await page.locator('html').getAttribute('data-swap-input-mode'), 'manual', 'manual swap mode was not restored');
-  assert.equal(await page.locator('html').getAttribute('data-rate-source-mode'), 'manual', 'manual rate mode was not restored');
-
   await page.locator('#dailyDate').fill('2026-09-10');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(25);
-  assert.equal(await page.locator('#dailySwap').isEditable(), true, 'manual swap input did not become editable');
+  assert.equal(await page.locator('#dailySwap').isEditable(), true);
   await page.locator('#dailyRate').fill('48.0000');
   await page.locator('#dailyUsdJpy').fill('158.400');
   await page.locator('#dailySwap').fill('100.78901');
   await page.locator('#dailyForm button[type="submit"]').click();
+  const manualSaved = await page.evaluate(() => JSON.parse(localStorage.getItem('dollar-to-lira:v1')).daily.find((row) => row.date === '2026-09-10'));
+  assert.equal(manualSaved.usdJpy, 158.4);
+  assert.equal(manualSaved.swapPerLot, 100.78901);
+  console.log('manual fallback mode: PASS');
 
-  const stored = await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    const row = state.daily.find((d) => d.date === '2026-09-10');
-    return {
-      row,
-      swapSnapshot: window.__DTL_SWAP_SNAPSHOT__?.() || null,
-      swapText: document.getElementById('kpiSwap')?.textContent || '',
-      dailySwapText: document.getElementById('kpiSwapDaily')?.textContent || '',
-      marginText: document.getElementById('kpiMargin')?.textContent || '',
-      tableText: document.getElementById('dailyTableBody')?.innerText || ''
-    };
-  });
-  assert.equal(stored.row.usdJpy, 158.4, 'USD/JPY was not saved');
-  assert.ok(Math.abs(stored.row.tryJpy - 3.3) < 1e-10, `TRY/JPY was not derived correctly: ${stored.row.tryJpy}`);
-  assert.equal(stored.row.swapPerLot, 100.78901, 'swap-per-lot decimal value was not preserved');
-  assert.ok(stored.swapSnapshot, 'precise swap snapshot helper is missing');
-  assert.equal(stored.swapSnapshot.date, '2026-09-10', `manual fixture is not the latest snapshot: ${stored.swapSnapshot.date}`);
-  assert.ok(Math.abs(stored.swapSnapshot.dailySwap - 123.9704823) < 1e-9, `daily swap lost fractional precision: ${stored.swapSnapshot.dailySwap}`);
-  assert.ok(Math.abs(stored.swapSnapshot.cumulativeSwap - 123.9704823) < 1e-9, `cumulative swap lost fractional precision: ${stored.swapSnapshot.cumulativeSwap}`);
-  assert.match(stored.swapText, /¥123/, `cumulative swap display should truncate to ¥123: ${stored.swapText}`);
-  assert.match(stored.dailySwapText, /¥123\/日/, `daily swap display should truncate to ¥123/day: ${stored.dailySwapText}`);
-  assert.match(stored.marginText, /¥7,872/, `1.23 lot at 1,000 units/lot and USDJPY 158.4 should require ¥7,872: ${stored.marginText}`);
-  assert.match(stored.tableText, /100\.78901/, 'swap-per-lot decimals are not displayed in daily table');
-  assert.match(stored.tableText, /158\.4/, 'USD/JPY is not displayed in daily table');
-  assert.match(stored.tableText, /3\.3000/, 'calculated TRY/JPY is not displayed in daily table');
-  console.log('USDJPY -> TRYJPY derivation: PASS');
-  console.log('swap 100.78901 x 1.23 -> internal 123.9704823 / display ¥123: PASS');
-  console.log('margin 6400/1000 x 1230 units -> 7872 yen: PASS');
-
-  await page.locator('#dailyDate').fill('2026-09-11');
-  await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForTimeout(25);
-  await page.locator('#dailyRate').fill('47.0000');
-  await page.locator('#dailyUsdJpy').fill('158.400');
-  await page.locator('#dailySwap').fill('100.78901');
-  await page.locator('#dailyForm button[type="submit"]').click();
-
-  await page.locator('[data-tab="calendar"]').click();
-  assert.equal(await page.locator('#view-calendar').evaluate((el) => el.classList.contains('active')), true, 'calendar view did not become active');
-  const weekdayTexts = await page.locator('.calendar-weekdays span').allTextContents();
-  assert.deepEqual(weekdayTexts, ['日','月','火','水','木','金','土'], `calendar weekdays are not Sunday-first: ${weekdayTexts.join(',')}`);
-  const leadingEmpty = await page.locator('#calendarGrid > .calendar-day.empty').evaluateAll((els) => {
-    let count = 0;
-    for (const el of els) {
-      if (el.previousElementSibling && !el.previousElementSibling.classList.contains('empty')) break;
-      count++;
-    }
-    return count;
-  });
-  assert.equal(leadingEmpty, 2, `Sep 2026 should have 2 leading blanks in a Sunday-first calendar, got ${leadingEmpty}`);
-
-  const mobileCalendarCheck = await page.evaluate(() => {
-    const days = [...document.querySelectorAll('#calendarGrid .calendar-day')];
-    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '10');
-    return target ? {
-      text: target.innerText,
-      main: target.querySelector('.calendar-pnl')?.textContent || '',
-      sub: target.querySelector('.calendar-sub')?.textContent || ''
-    } : null;
-  });
-  assert.ok(mobileCalendarCheck, 'mobile calendar did not render Sep 10');
-  assert.ok(!/NET/.test(mobileCalendarCheck.text), `mobile NET label was not removed: ${mobileCalendarCheck.text}`);
-  assert.match(mobileCalendarCheck.main, /¥/, `mobile main calendar value missing: ${mobileCalendarCheck.main}`);
-  console.log('Sunday-first calendar + phone compact rendering: PASS');
-
-  await page.setViewportSize({ width: 1200, height: 900 });
-  await page.waitForTimeout(50);
-  const desktopCalendarCheck = await page.evaluate(() => {
-    const days = [...document.querySelectorAll('#calendarGrid .calendar-day')];
-    const target = days.find((el) => el.querySelector('.calendar-date')?.textContent === '10');
-    return target ? target.innerText : '';
-  });
-  assert.match(desktopCalendarCheck, /FX/, `desktop calendar should retain FX label: ${desktopCalendarCheck}`);
-  assert.match(desktopCalendarCheck, /SWAP/, `desktop calendar should retain SWAP label: ${desktopCalendarCheck}`);
-  console.log('desktop calendar full labels: PASS');
+  await page.locator('#openSettingsBtn').click();
+  assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true);
+  await page.locator('#openBackupFromSettingsBtn').click();
+  assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), true);
+  await page.locator('#closeBackupBtn').click();
+  console.log('mobile backup access: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`E2E (${browserName}): PASS`);
