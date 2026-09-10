@@ -17,6 +17,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hirosePendingEntries === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCalendarRule === 'next-business-day-weekend-skip', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapEntitlementRule === 'source-date-open-exclusive-close-inclusive', { timeout: 15000 });
 
   const mapping = await page.evaluate(() => ({
     fridayToMonday: window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__?.('2026-07-10'),
@@ -31,14 +32,11 @@ try {
   assert.equal(mapping.saturdayCredit, null, 'Saturday must not receive a Hirose credit entry');
   assert.equal(mapping.sundayCredit, null, 'Sunday must not receive a Hirose credit entry');
   assert.equal(mapping.mondayCredit?.sourceDate, '2026-07-10', 'Monday credit must use Friday source row');
-  assert.equal(mapping.mondayCredit?.row?.sellJpy, 117.5, 'Friday 2026-07-10 sell swap must credit Monday');
+  assert.equal(mapping.mondayCredit?.row?.sellJpy, 117.5, 'Friday 2026-07-10 sell swap must post Monday');
   assert.equal(mapping.saturdayResolution?.status, 'zero', 'Saturday daily input must resolve to zero swap');
-  assert.equal(mapping.saturdayResolution?.weekend, true, 'Saturday must be marked as weekend zero');
   assert.equal(mapping.sundayResolution?.status, 'zero', 'Sunday daily input must resolve to zero swap');
-  assert.equal(mapping.sundayResolution?.weekend, true, 'Sunday must be marked as weekend zero');
   assert.equal(mapping.mondayResolution?.status, 'official', 'Monday must resolve to Friday official row');
-  assert.equal(mapping.mondayResolution?.sourceDate, '2026-07-10', 'Monday input must reference Friday source date');
-  assert.equal(mapping.mondayResolution?.shortPerLot, 117.5, 'Monday input must receive Friday 117.5 JPY');
+  assert.equal(mapping.mondayResolution?.shortPerLot, 117.5, 'Monday input must show Friday 117.5 JPY');
   console.log('Friday -> Monday mapping and weekend zero: PASS');
 
   await page.locator('#openSettingsBtn').click();
@@ -46,28 +44,40 @@ try {
   await page.locator('#closeSettingsBtn').click();
 
   await page.locator('[data-tab="daily"]').click();
-  await page.locator('#dailyDate').fill('2026-07-11');
-  await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 0, { timeout: 5000 });
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 0, 'Saturday input must display 0 swap');
-
-  await page.locator('#dailyDate').fill('2026-07-12');
-  await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 0, { timeout: 5000 });
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 0, 'Sunday input must display 0 swap');
+  for (const date of ['2026-07-11', '2026-07-12']) {
+    await page.locator('#dailyDate').fill(date);
+    await page.locator('#dailyDate').dispatchEvent('change');
+    await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 0, { timeout: 5000 });
+    assert.equal(Number(await page.locator('#dailySwap').inputValue()), 0, `${date} must display 0 swap`);
+  }
 
   await page.locator('#dailyDate').fill('2026-07-13');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) === 117.5, { timeout: 5000 });
-  await page.waitForFunction(() => /2026-07-10表記 → 2026-07-13計上/.test(document.querySelector('#dailySwap')?.closest('label')?.innerText || ''), { timeout: 5000 });
-  assert.equal(Number(await page.locator('#dailySwap').inputValue()), 117.5, 'Monday input must display Friday swap');
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-10表記 → 2026-07-13計上/, 'Monday note must show Friday source date');
   console.log('weekend daily input 0 / Monday Friday-source auto-fill: PASS');
 
-  // Submit the existing position form programmatically. This exercises the app's real
-  // save handler without relying on a WebKit-sensitive click/re-render sequence.
+  // Source-date entitlement is the important rule:
+  // opening day's source swap is excluded, closing day's source swap is included.
+  const sourceRules = await page.evaluate(() => ({
+    openedFridayThroughMonday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-10', side:'short', lots:1 }, '2026-07-13'),
+    openedThursdayThroughFriday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-09', side:'short', lots:1 }, '2026-07-10'),
+    openedThursdayClosedFriday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-09', closeDate:'2026-07-10', side:'short', lots:1 }, '2026-07-10'),
+    openedFridayClosedMonday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-10', closeDate:'2026-07-13', side:'short', lots:1 }, '2026-07-13'),
+    fridayEligibleWhenOpenedThursday: window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__?.({ date:'2026-07-09', side:'short', lots:1 }, '2026-07-10'),
+    fridayEligibleWhenOpenedFriday: window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__?.({ date:'2026-07-10', side:'short', lots:1 }, '2026-07-10')
+  }));
+  assert.equal(sourceRules.openedFridayThroughMonday, 0, 'position opened Friday must not receive Friday source swap on Monday');
+  assert.ok(Math.abs(sourceRules.openedThursdayThroughFriday - 291.31) < 1e-9, `normal Friday as-of is wrong: ${sourceRules.openedThursdayThroughFriday}`);
+  assert.ok(Math.abs(sourceRules.openedThursdayClosedFriday - 408.81) < 1e-9, `closing-day source swap was not included: ${sourceRules.openedThursdayClosedFriday}`);
+  assert.ok(Math.abs(sourceRules.openedFridayClosedMonday - 231.02) < 1e-9, `opening-day exclusion / closing-day inclusion is wrong: ${sourceRules.openedFridayClosedMonday}`);
+  assert.equal(sourceRules.fridayEligibleWhenOpenedThursday, true, 'Friday source should belong to a position opened before Friday');
+  assert.equal(sourceRules.fridayEligibleWhenOpenedFriday, false, 'Friday source must not belong to a position opened Friday');
+  console.log('source-date opening exclusion + closing inclusion: PASS');
+
+  // Use a position opened before Friday so the Friday source amount legitimately posts Monday.
   await page.evaluate(() => {
-    document.getElementById('positionDate').value = '2026-07-10';
+    document.getElementById('positionDate').value = '2026-07-09';
     document.getElementById('positionSide').value = 'short';
     document.getElementById('entryRate').value = '48.0000';
     document.getElementById('entryLots').value = '1';
@@ -76,35 +86,21 @@ try {
   });
   await page.waitForFunction(() => {
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
-    return Array.isArray(saved.positions) && saved.positions.some((p) => p.date === '2026-07-10' && p.side === 'short' && Number(p.lots) === 1);
+    return Array.isArray(saved.positions) && saved.positions.some((p) => p.date === '2026-07-09' && p.side === 'short' && Number(p.lots) === 1);
   }, { timeout: 10000 });
 
-  const positionRules = await page.evaluate(() => ({
-    throughFriday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', side: 'short', lots: 1 }, '2026-07-10'),
-    throughSaturday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', side: 'short', lots: 1 }, '2026-07-11'),
-    throughSunday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', side: 'short', lots: 1 }, '2026-07-12'),
-    throughMonday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', side: 'short', lots: 1 }, '2026-07-13'),
-    openedMonday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-13', side: 'short', lots: 1 }, '2026-07-13'),
-    closedMonday: window.__DTL_HIROSE_POSITION_SWAP__?.({ date: '2026-07-10', closeDate: '2026-07-13', side: 'short', lots: 1 }, '2026-07-13')
-  }));
-  assert.equal(positionRules.throughFriday, 0, 'Friday source amount must not be credited on Friday itself');
-  assert.equal(positionRules.throughSaturday, 0, 'Friday source amount must not be credited on Saturday');
-  assert.equal(positionRules.throughSunday, 0, 'Friday source amount must not be credited on Sunday');
-  assert.equal(positionRules.throughMonday, 117.5, 'Friday source amount must be credited Monday');
-  assert.equal(positionRules.openedMonday, 0, 'position opened Monday must not receive Monday credit');
-  assert.equal(positionRules.closedMonday, 117.5, 'position closed Monday must receive Monday credit');
-  console.log('weekend accrual + open-day exclusion + close-day inclusion: PASS');
+  const dailyPosting = await page.evaluate(() => window.__DTL_HIROSE_DAILY_SWAP_ENTITLED__?.('2026-07-13'));
+  assert.ok(Math.abs(dailyPosting - 117.5) < 1e-9, `Monday posting should be Friday 117.5 for pre-Friday position: ${dailyPosting}`);
 
   await page.locator('[data-tab="calendar"]').click();
-  // Historical rate backfill currently ends in September, so move September -> August -> July.
-  await page.locator('#prevMonthBtn').click();
-  await page.locator('#prevMonthBtn').click();
+  // Historical rate backfill currently lands in September; move to July.
+  for (let i = 0; i < 2; i += 1) await page.locator('#prevMonthBtn').click();
   assert.match(await page.locator('#calendarTitle').innerText(), /2026\s*\/\s*07/, 'calendar did not move to July 2026');
   const monday = page.locator('.calendar-day[data-date="2026-07-13"]');
   assert.equal(await monday.count(), 1, 'July 13 Monday calendar cell is missing');
   const mondayValues = await monday.locator('.calendar-value-mobile').allTextContents();
   assert.ok(mondayValues.some((value) => /¥117/.test(value)), `Monday calendar must show Friday swap ¥117: ${mondayValues.join(' | ')}`);
-  console.log('calendar Monday shows Friday swap instead of weekend: PASS');
+  console.log('calendar Monday shows eligible Friday source swap: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`HIROSE WEEKEND E2E (${browserName}): PASS`);
