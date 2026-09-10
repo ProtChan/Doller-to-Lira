@@ -53,6 +53,19 @@
       text-overflow:ellipsis;
       pointer-events:none;
     }
+    /* The same-day valuation patch adds an optional broker TRY/JPY field. Its help text
+       stays below the control without participating in grid-row height, so all inputs
+       and the save button keep one common baseline. */
+    .daily-entry-bar .valuation-conversion-field small{
+      position:absolute;
+      top:calc(100% + 5px);
+      left:0;
+      right:0;
+      margin:0!important;
+      line-height:12px!important;
+      max-height:24px;
+      overflow:hidden;
+    }
     .daily-entry-bar > button{
       height:40px;
       align-self:end;
@@ -66,6 +79,14 @@
       overflow-x:auto;
       overscroll-behavior-inline:contain;
       -webkit-overflow-scrolling:touch;
+    }
+
+    /* Desktop now has six controls: date, USD/TRY, USD/JPY, valuation TRY/JPY,
+       swap and save. Keep them on one row instead of wrapping the save button. */
+    @media(min-width:821px){
+      .daily-entry-bar{
+        grid-template-columns:140px minmax(160px,1fr) minmax(145px,1fr) minmax(190px,1.15fr) minmax(160px,1fr) auto;
+      }
     }
 
     /* Mobile: the fixed desktop column widths previously made only Daily Input wider
