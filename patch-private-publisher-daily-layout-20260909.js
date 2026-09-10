@@ -134,7 +134,9 @@
       .positions-layout>.data-table-wrap{height:100%;overflow:auto}
       .position-detail{height:100%;overflow:auto;padding-top:15px}
       .daily-entry-bar{padding-top:12px;padding-bottom:29px}
-      .daily-table-wrap{margin-top:12px;max-height:calc(100dvh - 286px);overflow:auto}
+      /* The table begins around y=383 at 1366x768; size it from the remaining viewport,
+         not from the earlier tab/header estimate, so history scrolls internally. */
+      .daily-table-wrap{margin-top:12px;max-height:calc(100dvh - 400px);overflow:auto}
       .risk-chart-block:first-child,.risk-chart-block:last-child{padding-top:14px;padding-bottom:12px}
       .chart-medium{height:clamp(210px,calc(100dvh - 350px),284px)}
       .risk-table{margin-top:12px}
