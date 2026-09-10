@@ -1,6 +1,6 @@
 // Final guard for explicit TRY/JPY valuation persistence and derived accounting.
 // Some Hirose layers are loaded asynchronously and can replace saveDailyFrom after
-// the same-day valuation patch has already wrapped it. Keep the manual conversion
+// the same-day valuation patch has already wrapped it. Keep the user's visible inputs
 // authoritative regardless of wrapper load order, including derived PnL/risk metrics.
 (() => {
   const root = document.documentElement;
@@ -8,19 +8,32 @@
 
   const STORE_KEY = 'dollar-to-lira:v1';
   const SWAP_MODE_KEY = 'dollar-to-lira:swap-mode:v1';
+  const RATE_SOURCE_KEY = 'dollar-to-lira:rate-source:v1';
   let installedSaveWrapper = null;
   let installedDerivedWrapper = null;
   let installedCalendarWrapper = null;
 
   const isHiroseMode = () => root.dataset.swapInputMode === 'hirose' || localStorage.getItem(SWAP_MODE_KEY) === 'hirose';
+  const isManualRateMode = () => {
+    const stored = localStorage.getItem(RATE_SOURCE_KEY) || 'auto';
+    return root.dataset.rateSourceMode === 'manual' || stored === 'saved' || stored === 'manual';
+  };
 
   const capture = (prefix) => {
     const date = document.getElementById(`${prefix}Date`)?.value || '';
     const input = document.getElementById(`${prefix}ValuationTryJpy`);
     const value = Number(input?.value);
+    const rate = Number(document.getElementById(`${prefix}Rate`)?.value);
+    const usdJpy = Number(document.getElementById(`${prefix}UsdJpy`)?.value);
+    const swapPerLot = Number(document.getElementById(`${prefix}Swap`)?.value);
     return {
       prefix,
       date,
+      rate,
+      usdJpy,
+      swapPerLot,
+      manualRate: isManualRateMode(),
+      manualSwap: !isHiroseMode(),
       manual: input?.dataset.conversionSource === 'manual' && Number.isFinite(value) && value > 0,
       value
     };
@@ -45,9 +58,11 @@
     const rateInput = document.getElementById(`${prefix}Rate`);
     const usdJpyInput = document.getElementById(`${prefix}UsdJpy`);
     const conversionInput = document.getElementById(`${prefix}ValuationTryJpy`);
+    const swapInput = document.getElementById(`${prefix}Swap`);
     if (dateInput) dateInput.value = date;
     if (rateInput && Number(saved.rate) > 0) rateInput.value = String(saved.rate);
     if (usdJpyInput && Number(saved.usdJpy) > 0) usdJpyInput.value = String(saved.usdJpy);
+    if (swapInput && !isHiroseMode() && Number.isFinite(Number(saved.swapPerLot))) swapInput.value = String(saved.swapPerLot);
 
     if (conversionInput) {
       const explicit = Number(saved.valuationTryJpy);
@@ -124,6 +139,30 @@
     if (!payload?.date || !Array.isArray(state?.daily)) return;
     const row = state.daily.find((item) => item?.date === payload.date);
     if (!row) return;
+
+    // A late async source writer must never replace values that were visible in the
+    // form at submit time. This is especially important in Manual rate/swap mode.
+    if (Number.isFinite(payload.rate) && payload.rate > 0) row.rate = payload.rate;
+    if (Number.isFinite(payload.usdJpy) && payload.usdJpy > 0) row.usdJpy = payload.usdJpy;
+    if (payload.manualRate) {
+      row.rateSource = 'manual';
+      delete row.rateSourcePrice;
+      delete row.rateSourceTimeframe;
+      delete row.rateSourceBarTime;
+      delete row.usdTryAskDayHigh;
+      delete row.usdTryAskDayHighSource;
+    }
+    if (payload.manualSwap && Number.isFinite(payload.swapPerLot)) {
+      row.swapPerLot = payload.swapPerLot;
+      row.swapSource = 'manual';
+      row.swapPending = false;
+      delete row.swapSourceDate;
+      delete row.swapCreditDate;
+      delete row.swapSourceDays;
+      delete row.swapSourceUnit;
+      delete row.swapSourceSellJpy;
+      delete row.swapSourceBuyJpy;
+    }
 
     if (payload.manual) {
       row.valuationTryJpy = payload.value;
