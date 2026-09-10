@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dollar-to-lira-pwa-0052';
+const CACHE_NAME = 'dollar-to-lira-pwa-0056';
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,7 +7,7 @@ const APP_SHELL = [
   './pwa-mobile-20260906.css?v=20260906-1140',
   './manifest.webmanifest?v=20260906-1141',
   './icon-dollar-lira.svg?v=20260906-1141',
-  './runtime-20260906-1140.js?v=20260911-0052'
+  './runtime-20260906-1140.js?v=20260911-0056'
 ];
 
 self.addEventListener('install', (event) => {
@@ -45,8 +45,6 @@ self.addEventListener('fetch', (event) => {
   const isRuntime = /\/runtime-[^/]+\.js$/.test(url.pathname);
   const isImmutableAsset = !isNavigation && !isData && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
 
-  // Runtime controls versioned patch URLs. Prefer network so an installed PWA
-  // cannot pin an old runtime after a deployment.
   if (isRuntime) {
     event.respondWith((async () => {
       try {
