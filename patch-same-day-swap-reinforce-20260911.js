@@ -108,6 +108,32 @@
     root.dataset.sameDaySwapAccountingActive = '1';
   };
 
+  const settleVisibleInput = (prefix) => {
+    if (!isHirose()) return;
+    const date = document.getElementById(`${prefix}Date`)?.value;
+    const input = document.getElementById(`${prefix}Swap`);
+    if (!date || !input) return;
+    const current = resolution(date);
+    input.readOnly = true;
+    input.value = String(Number(current.shortPerLot || 0));
+    input.dataset.hiroseAuto = '1';
+    delete input.dataset.hirosePending;
+    delete input.dataset.hiroseZero;
+    if (current.status === 'pending') input.dataset.hirosePending = '1';
+    if (current.status === 'zero') input.dataset.hiroseZero = '1';
+
+    const note = input.closest('label')?.querySelector('.swap-source-note');
+    if (!note) return;
+    if (current.status === 'official') {
+      const row = current.row || {};
+      note.textContent = `ヒロセ ${date}付与 · ${Number(row.days || 0)}日分 · ${Number(row.unit || 1000).toLocaleString()}通貨 ${Number(row.sellJpy || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円 → ${Number(state.settings.unitsPerLot || 1000).toLocaleString()}通貨 ${Number(current.shortPerLot || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
+    } else if (current.status === 'pending') {
+      note.textContent = `${date}分 未確定 → 現在0円（取得後に同日へ自動反映）`;
+    } else {
+      note.textContent = current.weekend ? `${date}は週末のためSwap 0円` : `${date}はヒロセ表記なし → Swap 0円`;
+    }
+  };
+
   const reinstallSoon = () => setTimeout(() => {
     install();
     try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
@@ -142,6 +168,21 @@
     units.addEventListener('change', reinstallSoon);
   }
 
+  // These are intentionally the last date listeners installed by the runtime. Older
+  // pending/next-business-day patches still have zero-delay writers attached to the
+  // same controls. Queue our same-day writer last so the visible value and note cannot
+  // fall back to the previous business day's row after a date change.
+  ['daily', 'quickDaily'].forEach((prefix) => {
+    const dateInput = document.getElementById(`${prefix}Date`);
+    if (!dateInput || dateInput.dataset.sameDaySwapReinforceBound) return;
+    dateInput.dataset.sameDaySwapReinforceBound = '1';
+    const settleSoon = () => setTimeout(() => settleVisibleInput(prefix), 0);
+    dateInput.addEventListener('input', settleSoon);
+    dateInput.addEventListener('change', settleSoon);
+  });
+
   install();
+  settleVisibleInput('daily');
+  settleVisibleInput('quickDaily');
   root.dataset.sameDaySwapReinforce = '1';
 })();
