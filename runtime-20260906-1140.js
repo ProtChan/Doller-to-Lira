@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = '20260910-0015';
+  const BUILD = '20260911-0035';
   const showError = (message) => {
     document.documentElement.dataset.appLoadError = message;
     const bar = document.createElement('div');
@@ -47,7 +47,7 @@
       (0, eval)(`${defaultUnitsNormalizedAppSource}\n${accountingSource}\n${swapDecimalSource}\n${calendarSource}\n${pwaSource}\n${accessLayoutSource}\n${swapPrecisionSource}\n${hiroseHistorySource}\n${hiroseRateHistorySource}\n${hirosePendingBootstrapSource}\n${hiroseInputSettleSource}\n${closeConversionSource}\n${capitalHistorySource}\n${rateEditPerformanceSource}\n${userPreparedRateSource}\n${worstAskRiskSource}\n${referenceDataRebuildSource}\n${privatePublisherDailyLayoutSource}\n${liveRateRefreshSource}\n//# sourceURL=dollar-to-lira-${BUILD}.js`);
       document.documentElement.dataset.runtimeBuild = BUILD;
       const status = document.querySelector('.local-status');
-      if (status) status.innerHTML = '<i></i>LOCAL · 0015';
+      if (status) status.innerHTML = '<i></i>LOCAL · 0035';
     })
     .catch((error) => showError(error?.message || String(error)));
 })();
