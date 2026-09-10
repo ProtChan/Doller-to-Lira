@@ -100,8 +100,21 @@
     }
 
     if (rate > 0 && usdJpy > 0) {
-      input.value = String(Number((usdJpy / rate).toFixed(6)));
+      const synthetic = usdJpy / rate;
+      input.value = String(Number(synthetic.toFixed(6)));
       input.dataset.conversionSource = 'synthetic';
+
+      // Make the reset authoritative immediately. Several legacy listeners resync the
+      // field asynchronously after tab/date changes; if the saved row still contains
+      // the manual override they can put it straight back before the user presses Save.
+      // Clearing it here makes every later resync see the same synthetic state.
+      if (saved) {
+        delete saved.valuationTryJpy;
+        saved.valuationTryJpySource = 'synthetic';
+        saved.tryJpy = synthetic;
+        state.updatedAt = new Date().toISOString();
+        localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      }
     }
   };
 
