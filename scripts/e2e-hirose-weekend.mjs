@@ -59,6 +59,8 @@ try {
 
   // Source-date entitlement is the important rule:
   // opening day's source swap is excluded, closing day's source swap is included.
+  // Open positions recognize an eligible source row when its shifted credit date arrives;
+  // a closed trade recognizes its closing source-date row in realized PnL immediately.
   const sourceRules = await page.evaluate(() => ({
     openedFridayThroughMonday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-10', side:'short', lots:1 }, '2026-07-13'),
     openedThursdayThroughFriday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-09', side:'short', lots:1 }, '2026-07-10'),
@@ -68,8 +70,8 @@ try {
     fridayEligibleWhenOpenedFriday: window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__?.({ date:'2026-07-10', side:'short', lots:1 }, '2026-07-10')
   }));
   assert.equal(sourceRules.openedFridayThroughMonday, 0, 'position opened Friday must not receive Friday source swap on Monday');
-  assert.ok(Math.abs(sourceRules.openedThursdayThroughFriday - 291.31) < 1e-9, `normal Friday as-of is wrong: ${sourceRules.openedThursdayThroughFriday}`);
-  assert.ok(Math.abs(sourceRules.openedThursdayClosedFriday - 408.81) < 1e-9, `closing-day source swap was not included: ${sourceRules.openedThursdayClosedFriday}`);
+  assert.equal(sourceRules.openedThursdayThroughFriday, 0, `open position must not recognize Friday source before Monday credit: ${sourceRules.openedThursdayThroughFriday}`);
+  assert.ok(Math.abs(sourceRules.openedThursdayClosedFriday - 117.5) < 1e-9, `closing-day source swap was not included correctly: ${sourceRules.openedThursdayClosedFriday}`);
   assert.ok(Math.abs(sourceRules.openedFridayClosedMonday - 231.02) < 1e-9, `opening-day exclusion / closing-day inclusion is wrong: ${sourceRules.openedFridayClosedMonday}`);
   assert.equal(sourceRules.fridayEligibleWhenOpenedThursday, true, 'Friday source should belong to a position opened before Friday');
   assert.equal(sourceRules.fridayEligibleWhenOpenedFriday, false, 'Friday source must not belong to a position opened Friday');
