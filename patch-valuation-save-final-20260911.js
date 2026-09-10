@@ -19,20 +19,58 @@
     const input = document.getElementById(`${prefix}ValuationTryJpy`);
     const value = Number(input?.value);
     return {
+      prefix,
       date,
       manual: input?.dataset.conversionSource === 'manual' && Number.isFinite(value) && value > 0,
       value
     };
   };
 
+  const savedRowFor = (date) => Array.isArray(state?.daily)
+    ? state.daily.find((row) => row?.date === date) || null
+    : null;
+
+  const syntheticFor = (row) => {
+    const rate = Number(row?.rate);
+    const usdJpy = Number(row?.usdJpy);
+    return rate > 0 && usdJpy > 0 ? usdJpy / rate : 0;
+  };
+
+  const restoreSavedForm = (prefix, date) => {
+    if (!prefix || !date) return;
+    const saved = savedRowFor(date);
+    if (!saved) return;
+
+    const dateInput = document.getElementById(`${prefix}Date`);
+    const rateInput = document.getElementById(`${prefix}Rate`);
+    const usdJpyInput = document.getElementById(`${prefix}UsdJpy`);
+    const conversionInput = document.getElementById(`${prefix}ValuationTryJpy`);
+    if (dateInput) dateInput.value = date;
+    if (rateInput && Number(saved.rate) > 0) rateInput.value = String(saved.rate);
+    if (usdJpyInput && Number(saved.usdJpy) > 0) usdJpyInput.value = String(saved.usdJpy);
+
+    if (conversionInput) {
+      const explicit = Number(saved.valuationTryJpy);
+      if (explicit > 0) {
+        conversionInput.value = String(explicit);
+        conversionInput.dataset.conversionSource = 'manual';
+      } else {
+        const synthetic = syntheticFor(saved);
+        conversionInput.value = synthetic > 0 ? String(Number(synthetic.toFixed(6))) : '';
+        conversionInput.dataset.conversionSource = 'synthetic';
+      }
+    }
+  };
+
   const resetToSynthetic = (prefix) => {
-    const date = document.getElementById(`${prefix}Date`)?.value || '';
+    const dateInput = document.getElementById(`${prefix}Date`);
+    const date = dateInput?.value || '';
     const input = document.getElementById(`${prefix}ValuationTryJpy`);
     if (!input || !date) return;
 
     let rate = Number(document.getElementById(`${prefix}Rate`)?.value);
     let usdJpy = Number(document.getElementById(`${prefix}UsdJpy`)?.value);
-    const saved = Array.isArray(state?.daily) ? state.daily.find((row) => row?.date === date) : null;
+    const saved = savedRowFor(date);
     if (!(rate > 0)) rate = Number(saved?.rate);
     if (!(usdJpy > 0)) usdJpy = Number(saved?.usdJpy);
 
@@ -94,9 +132,8 @@
     } else {
       delete row.valuationTryJpy;
       row.valuationTryJpySource = 'synthetic';
-      const rate = Number(row.rate);
-      const usdJpy = Number(row.usdJpy);
-      if (rate > 0 && usdJpy > 0) row.tryJpy = usdJpy / rate;
+      const synthetic = syntheticFor(row);
+      if (synthetic > 0) row.tryJpy = synthetic;
     }
 
     state.updatedAt = new Date(Date.now() + 1).toISOString();
@@ -225,15 +262,19 @@
     bindSyntheticResetGuards();
   };
 
-  // Capture-phase fallback: even if an async layer replaces saveDailyFrom between
-  // observer turns, persist the user's conversion immediately after that submit task.
+  // Capture the row before the base submit handler runs. The base handler clears the
+  // rate and calls fillDailyForm() with today's date after save; restore the date the
+  // user just saved so "合成値に戻す" still targets that same historical row.
   [['dailyForm', 'daily'], ['quickDailyForm', 'quickDaily']].forEach(([formId, prefix]) => {
     const form = document.getElementById(formId);
     if (!form || form.dataset.valuationSaveFinalBound) return;
     form.dataset.valuationSaveFinalBound = '1';
     form.addEventListener('submit', () => {
       const payload = capture(prefix);
-      queueMicrotask(() => persist(payload));
+      queueMicrotask(() => {
+        persist(payload);
+        restoreSavedForm(prefix, payload.date);
+      });
     }, true);
   });
 
