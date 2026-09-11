@@ -78,7 +78,25 @@ try {
   assert.match(await september3.innerText(), /S×4/, 'calendar must mark the four-day swap on September 3');
 
   await page.locator('[data-tab="daily"]').click();
+  const resetState = async () => page.evaluate(() => {
+    const formDate = document.querySelector('#dailyDate')?.value || '';
+    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
+    const row = state.daily.find((item) => item.date === formDate) || null;
+    const input = document.querySelector('#dailyValuationTryJpy');
+    return {
+      formDate,
+      rate: document.querySelector('#dailyRate')?.value || '',
+      usdJpy: document.querySelector('#dailyUsdJpy')?.value || '',
+      conversion: input?.value || '',
+      conversionSource: input?.dataset.conversionSource || '',
+      finalGuard: document.documentElement.dataset.valuationSaveFinal || '',
+      row
+    };
+  });
+  console.log('SYNTHETIC RESET BEFORE=', JSON.stringify(await resetState()));
   await page.locator('[data-synthetic-conversion="daily"]').click();
+  await page.waitForTimeout(50);
+  console.log('SYNTHETIC RESET AFTER=', JSON.stringify(await resetState()));
   const reverted = Number(await page.locator('#dailyValuationTryJpy').inputValue());
   assert.ok(reverted > 0 && Math.abs(reverted - customConversion) > 1e-6, 'synthetic reset did not replace manual conversion');
   await page.locator('#dailyForm button[type="submit"]').click();
