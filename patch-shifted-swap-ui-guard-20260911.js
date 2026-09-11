@@ -113,9 +113,10 @@
     if (!dateInput || dateInput.dataset.shiftedSwapUiGuardBound) return;
     dateInput.dataset.shiftedSwapUiGuardBound = '1';
     const schedule = () => settleBurst(prefix);
-    // Capture phase plus delayed writes make this final guard independent of legacy listener order.
-    dateInput.addEventListener('input', schedule, true);
-    dateInput.addEventListener('change', schedule, true);
+    // This file loads after the legacy same-day writers. Register in the normal bubble
+    // phase so our zero-delay callback is queued after theirs and wins the same event tick.
+    dateInput.addEventListener('input', schedule);
+    dateInput.addEventListener('change', schedule);
   });
 
   const observer = new MutationObserver((mutations) => {
