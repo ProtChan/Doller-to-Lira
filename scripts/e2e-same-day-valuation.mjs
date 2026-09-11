@@ -13,6 +13,14 @@ const near = (actual, expected, label) => assert.ok(
   Math.abs(Number(actual) - Number(expected)) < 1e-8,
   `${label}: expected ${expected}, got ${actual}`
 );
+const closeSettingsIfOpen = async () => {
+  const drawer = page.locator('#settingsDrawer');
+  if ((await drawer.getAttribute('aria-hidden')) === 'false') {
+    const close = page.locator('#closeSettingsBtn');
+    if (await close.isVisible()) await close.click();
+  }
+  await page.waitForFunction(() => document.querySelector('#settingsDrawer')?.getAttribute('aria-hidden') === 'true', { timeout: 5000 });
+};
 
 try {
   console.log('VALUATION RULE E2E BROWSER=', browserName);
@@ -20,12 +28,14 @@ try {
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.sameDaySwapValuation === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.valuationUi === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.backendCoreReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.shiftedSwapDisplay === '1', { timeout: 15000 });
 
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('hirose');
-  await page.locator('#closeSettingsBtn').click();
+  await closeSettingsIfOpen();
+  await page.waitForFunction(() => saveDailyFrom?.__dtlCanonicalBackend === true && derivedDaily?.__dtlCanonicalBackend === true, { timeout: 5000 });
   await page.locator('[data-tab="daily"]').click();
 
   assert.equal(await page.locator('#dailyValuationTryJpy').count(), 1, 'daily valuation conversion input is missing');
