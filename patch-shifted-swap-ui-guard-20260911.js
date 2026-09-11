@@ -100,11 +100,18 @@
   const settleBurst = (prefix) => {
     [0, 20, 80, 250, 750].forEach((delay) => setTimeout(() => settle(prefix), delay));
   };
+  const settleNowAndBurst = (prefix) => {
+    // WebKit can expose a legacy writer's pending flag before a zero-delay timer runs.
+    // Write the shifted-calendar value/note synchronously first, then keep the burst to
+    // defeat later async legacy writers and feed refreshes.
+    settle(prefix);
+    settleBurst(prefix);
+  };
 
   const originalFillDailyForm = fillDailyForm;
   fillDailyForm = function(prefix, date) {
     const result = originalFillDailyForm.apply(this, arguments);
-    settleBurst(prefix);
+    settleNowAndBurst(prefix);
     return result;
   };
 
@@ -112,9 +119,9 @@
     const dateInput = document.getElementById(`${prefix}Date`);
     if (!dateInput || dateInput.dataset.shiftedSwapUiGuardBound) return;
     dateInput.dataset.shiftedSwapUiGuardBound = '1';
-    const schedule = () => settleBurst(prefix);
+    const schedule = () => settleNowAndBurst(prefix);
     // This file loads after the legacy same-day writers. Register in the normal bubble
-    // phase so our zero-delay callback is queued after theirs and wins the same event tick.
+    // phase so our synchronous write is the final visible state of the same event tick.
     dateInput.addEventListener('input', schedule);
     dateInput.addEventListener('change', schedule);
   });
@@ -129,8 +136,8 @@
       'data-live-rate-refresh-ready',
       'data-reference-data-rebuilt-at'
     ].includes(mutation.attributeName))) return;
-    settleBurst('daily');
-    settleBurst('quickDaily');
+    settleNowAndBurst('daily');
+    settleNowAndBurst('quickDaily');
   });
   observer.observe(root, {
     attributes: true,
@@ -147,6 +154,6 @@
 
   root.dataset.hiroseSwapInputRule = 'previous-business-day-source-next-business-day-display';
   root.dataset.shiftedSwapUiGuard = '1';
-  settleBurst('daily');
-  settleBurst('quickDaily');
+  settleNowAndBurst('daily');
+  settleNowAndBurst('quickDaily');
 })();
