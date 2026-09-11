@@ -20,6 +20,30 @@
     : null;
 
   const liveRateAt = (date) => liveByDate.get(date) || null;
+  const supplementalHighAt = (date) => {
+    try {
+      const row = typeof window.__DTL_ASK_DAY_HIGH_AT__ === 'function'
+        ? window.__DTL_ASK_DAY_HIGH_AT__(date)
+        : null;
+      return Number(row?.usdTryAskDayHigh) > 0 ? row : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const withSupplementalHigh = (row, date) => {
+    if (!row) return null;
+    const existingHigh = Number(row.usdTryAskDayHigh);
+    if (existingHigh > 0) return { ...row, usdTryAskDayHigh: existingHigh };
+    const extra = supplementalHighAt(date || row.date);
+    if (!extra) return { ...row };
+    return {
+      ...row,
+      usdTryAskDayHigh: Number(extra.usdTryAskDayHigh),
+      usdTryAskDayHighSource: extra.source
+        || extra.usdTryAskDayHighSource
+        || (extra.sourceTimeframe === '4h' ? 'uploaded-hirose-4h-ask-csv' : 'uploaded-hirose-60m-ask-csv')
+    };
+  };
 
   const installRateLookup = () => {
     const fallback = typeof window.__DTL_HIROSE_RATE_AT__ === 'function'
@@ -32,11 +56,11 @@
 
   function wrappedRateAt(date) {
     const live = liveRateAt(date);
-    if (live) return { ...live };
+    if (live) return withSupplementalHigh(live, date);
     const fallback = wrappedRateAt._fallback;
     try {
       const row = typeof fallback === 'function' ? fallback(date) : null;
-      return row ? { ...row } : null;
+      return row ? withSupplementalHigh(row, date) : null;
     } catch (_) {
       return null;
     }
@@ -55,7 +79,8 @@
     if (!Array.isArray(state?.daily) || !liveByDate.size) return 0;
     const existing = new Set(state.daily.map((row) => row?.date).filter(Boolean));
     let added = 0;
-    [...liveByDate.values()].sort((a, b) => a.date.localeCompare(b.date)).forEach((source) => {
+    [...liveByDate.values()].sort((a, b) => a.date.localeCompare(b.date)).forEach((rawSource) => {
+      const source = withSupplementalHigh(rawSource, rawSource?.date) || rawSource;
       if (!source?.date || existing.has(source.date)) return;
       const rate = Number(source.usdTryAskClose23);
       const usdJpy = Number(source.usdJpyAskClose23);
@@ -178,7 +203,7 @@
   window.__DTL_REFRESH_HIROSE_RATES__ = (force = true) => refresh({ force: !!force });
   window.__DTL_LIVE_HIROSE_RATE_AT__ = (date) => {
     const row = liveRateAt(date);
-    return row ? { ...row } : null;
+    return row ? withSupplementalHigh(row, date) : null;
   };
 
   installRateLookup();
