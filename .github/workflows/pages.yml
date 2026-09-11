@@ -61,6 +61,7 @@ jobs:
             scripts/e2e-close-conversion.mjs \
             scripts/e2e-capital-history.mjs \
             scripts/e2e-hirose-weekend.mjs \
+            scripts/e2e-pnl-date-alignment.mjs \
             scripts/e2e-same-day-valuation.mjs \
             scripts/e2e-rate-edit-performance.mjs \
             scripts/e2e-publisher-risk.mjs \
@@ -82,6 +83,7 @@ jobs:
             scripts/e2e-close-conversion.mjs \
             scripts/e2e-capital-history.mjs \
             scripts/e2e-hirose-weekend.mjs \
+            scripts/e2e-pnl-date-alignment.mjs \
             scripts/e2e-same-day-valuation.mjs \
             scripts/e2e-rate-edit-performance.mjs \
             scripts/e2e-publisher-risk.mjs \
@@ -117,6 +119,7 @@ jobs:
             scripts/e2e-close-conversion.mjs \
             scripts/e2e-capital-history.mjs \
             scripts/e2e-hirose-weekend.mjs \
+            scripts/e2e-pnl-date-alignment.mjs \
             scripts/e2e-same-day-valuation.mjs \
             scripts/e2e-rate-edit-performance.mjs \
             scripts/e2e-publisher-risk.mjs \
@@ -138,6 +141,7 @@ jobs:
             scripts/e2e-close-conversion.mjs \
             scripts/e2e-capital-history.mjs \
             scripts/e2e-hirose-weekend.mjs \
+            scripts/e2e-pnl-date-alignment.mjs \
             scripts/e2e-same-day-valuation.mjs \
             scripts/e2e-rate-edit-performance.mjs \
             scripts/e2e-publisher-risk.mjs \
