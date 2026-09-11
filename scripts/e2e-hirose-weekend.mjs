@@ -93,6 +93,25 @@ try {
   near(regressions.sep9.at(-1), 552.1, '9/9 position total');
   console.log('9/4, 9/8 and 9/9 production regressions: PASS');
 
+  const finalDayNet = await page.evaluate(() => {
+    const p = {
+      date: '2026-09-04', closeDate: '2026-09-10', side: 'short', lots: 155,
+      entryRate: 48.4409, closeRate: 48.4970, closeTryJpy: 3.174
+    };
+    const rate9 = 48.4787;
+    const tryJpy9 = 153.21 / rate9;
+    const fx9 = positionFxAsOf(p, '2026-09-09', rate9, tryJpy9);
+    const swap9 = positionSwapAsOf(p, '2026-09-09');
+    const fx10 = positionFxAsOf(p, '2026-09-10', 48.4970, 3.174);
+    const swap10 = positionSwapAsOf(p, '2026-09-10');
+    return { fx9, swap9, net9: fx9 + swap9, fx10, swap10, net10: fx10 + swap10 };
+  });
+  near(finalDayNet.swap9, 35970.85, '9/9 cumulative swap');
+  near(finalDayNet.swap10, 53085.95, '9/10 cumulative swap');
+  near(finalDayNet.net10, 25486.433, '9/10 final net');
+  assert.ok(finalDayNet.net10 > finalDayNet.net9, `final-day net must rise after 9/10 swap credit: 9/9=${finalDayNet.net9}, 9/10=${finalDayNet.net10}`);
+  console.log('155-lot final-day net return no artificial drop: PASS');
+
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`HIROSE SHIFTED-DISPLAY E2E (${browserName}): PASS`);
 } finally {
