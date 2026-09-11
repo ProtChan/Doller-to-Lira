@@ -48,6 +48,8 @@ try {
 
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('hirose');
+  const unitsPerLot = Number(await page.locator('#settingUnits').inputValue());
+  assert.ok(unitsPerLot > 0, 'site lot unit must be positive');
   await page.locator('#closeSettingsBtn').click();
 
   const model = await page.evaluate(() => {
@@ -55,12 +57,10 @@ try {
       .filter((row) => row?.date)
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const credits = window.__DTL_HIROSE_CREDIT_HISTORY__?.() || [];
-    const unitsPerLot = Number(state.settings.unitsPerLot || 0);
-    return { rows, credits, unitsPerLot };
+    return { rows, credits };
   });
 
   assert.ok(model.rows.length > 1, 'Hirose history must contain multiple source rows');
-  assert.ok(model.unitsPerLot > 0, 'site lot unit must be positive');
 
   const sourceRows = model.rows.filter((row) => !isWeekend(row.date));
   assert.equal(model.credits.length, sourceRows.length, 'each business-day source row must map to exactly one display date');
@@ -99,7 +99,7 @@ try {
     assert.equal(resolution.sourceDate, source.date);
     assert.equal(resolution.status, 'official');
 
-    const scale = model.unitsPerLot / Number(source.unit || 1000);
+    const scale = unitsPerLot / Number(source.unit || 1000);
     const expectedShort = Number(source.sellJpy || 0) * scale;
     const expectedLong = Number(source.buyJpy || 0) * scale;
     near(resolution.shortPerLot, expectedShort, `short amount for source ${source.date}`);
@@ -146,11 +146,11 @@ try {
       && entry.creditDate <= closeDate
     ));
     const expectedShort = eligibleEntries.reduce((sum, entry) => {
-      const factor = model.unitsPerLot / Number(entry.row.unit || 1000);
+      const factor = unitsPerLot / Number(entry.row.unit || 1000);
       return sum + Number(entry.row.sellJpy || 0) * factor;
     }, 0);
     const expectedLong = eligibleEntries.reduce((sum, entry) => {
-      const factor = model.unitsPerLot / Number(entry.row.unit || 1000);
+      const factor = unitsPerLot / Number(entry.row.unit || 1000);
       return sum + Number(entry.row.buyJpy || 0) * factor;
     }, 0);
     near(point.short, expectedShort, `cumulative short swap as of ${point.asOfDate}`);
@@ -159,7 +159,7 @@ try {
   console.log('cumulative swap equals the sum of eligible display-date credits: PASS');
 
   // Net PnL has no monotonicity requirement. FX and swap can move in opposite directions.
-  // The invariant is only that each plotted/calculated Net point equals FX + cumulative Swap.
+  // The invariant is only that each calculated Net point equals FX + cumulative Swap.
   const arithmeticChecks = await page.evaluate(({ openDate, closeDate, asOfDates }) => {
     const p = { date: openDate, closeDate, side: 'short', lots: 1, entryRate: 50, closeRate: 51 };
     return asOfDates
