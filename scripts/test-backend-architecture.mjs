@@ -10,9 +10,10 @@ assert.equal(new Set(SOURCE_FILES).size, SOURCE_FILES.length, 'runtime manifest 
 assert.ok(SOURCE_FILES[0] === 'app.js', 'app.js must be the first runtime source');
 assert.ok(SOURCE_FILES.includes('patch-hirose-swap-margin-20260906.js'), 'Hirose margin integration must be bundled directly');
 assert.ok(SOURCE_FILES.includes('patch-valuation-ui-20260911.js'), 'valuation UI must be isolated from accounting');
-assert.equal(SOURCE_FILES.at(-3), 'patch-shifted-swap-display-20260911.js', 'shifted swap accounting must be the authoritative swap layer');
-assert.equal(SOURCE_FILES.at(-2), 'patch-shifted-swap-ui-guard-20260911.js', 'shifted swap UI guard must follow accounting');
-assert.equal(SOURCE_FILES.at(-1), 'patch-backend-final-20260911.js', 'canonical backend must be the final runtime source');
+assert.equal(SOURCE_FILES.at(-4), 'patch-shifted-swap-display-20260911.js', 'shifted swap accounting must be the authoritative swap layer');
+assert.equal(SOURCE_FILES.at(-3), 'patch-shifted-swap-ui-guard-20260911.js', 'shifted swap UI guard must follow accounting');
+assert.equal(SOURCE_FILES.at(-2), 'patch-backend-final-20260911.js', 'canonical backend must own the final accounting hot path');
+assert.equal(SOURCE_FILES.at(-1), 'patch-pnl-date-alignment-20260911.js', 'PnL date-alignment presentation must be the final runtime layer');
 for (const retired of RETIRED_RUNTIME_FILES) {
   assert.ok(!SOURCE_FILES.includes(retired), `${retired} is retired and must not be in production runtime`);
 }
@@ -39,6 +40,7 @@ assert.deepEqual(localScripts, [`./app.bundle.js?v=${BUILD}`], `expected exactly
 
 assert.match(bundle, /backendArchitecture = 'single-bundle'/, 'single-bundle marker missing');
 assert.match(bundle, /backendCoreVersion = '20260911-1422'/, 'canonical backend marker missing');
+assert.match(bundle, /dataset\.pnlDateAlignment = '1'/, 'PnL date-alignment marker missing');
 assert.doesNotMatch(bundle, /\beval\s*\(/, 'bundle contains eval()');
 assert.doesNotMatch(bundle, /fetch\s*\([^\n;]*\.js(?:[?`'\"]|\b)/, 'bundle dynamically fetches JavaScript');
 assert.doesNotMatch(bundle, /runtime-[0-9-]+\.js/, 'bundle references a legacy runtime loader');
