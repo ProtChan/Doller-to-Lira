@@ -166,6 +166,12 @@
       .calendar-day{min-height:clamp(68px,calc((100dvh - 315px)/6),92px);padding:7px}
       .disclaimer{margin-top:16px;padding-top:11px;font-size:8px}
     }
+
+    /* 768px-high laptop viewports need a little more headroom than the generic
+       compact mode. Keep the overview graph useful while preventing page-level scroll. */
+    @media(min-width:821px) and (max-height:800px){
+      .chart-large{height:276px}
+    }
   `;
   document.head.appendChild(style);
 
