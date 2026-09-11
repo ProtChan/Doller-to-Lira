@@ -93,9 +93,11 @@ try {
   console.log('latest available feed row auto-fills the daily form: PASS');
 
   // Pick a real available row dynamically and verify that an explicit user edit remains authoritative.
+  // Keep the edit inside the precision the actual form supports (USD/TRY 4dp, USD/JPY 3dp),
+  // so the invariant tests persistence rather than impossible sub-step display precision.
   const editFixture = expectedRows[Math.floor(expectedRows.length / 2)];
-  const manualRate = Number((Number(editFixture.usdTryAskClose23) * 1.012345).toFixed(6));
-  const manualUsdJpy = Number((Number(editFixture.usdJpyAskClose23) * 0.98765).toFixed(6));
+  const manualRate = Number((Number(editFixture.usdTryAskClose23) * 1.012345).toFixed(4));
+  const manualUsdJpy = Number((Number(editFixture.usdJpyAskClose23) * 0.98765).toFixed(3));
   assert.ok(manualRate > 0 && manualUsdJpy > 0);
   assert.notEqual(manualRate, Number(editFixture.usdTryAskClose23));
   assert.notEqual(manualUsdJpy, Number(editFixture.usdJpyAskClose23));
