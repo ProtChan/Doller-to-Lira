@@ -119,8 +119,9 @@ try {
   assert.equal(await page.locator('#dailyUsdJpy').inputValue(), '');
   assert.match(await page.locator('#dailyRate').locator('xpath=..').innerText(), /手入力/);
 
-  const manualRate = Number((fixture.positionRate * 1.007).toFixed(6));
-  const manualUsdJpy = Number((Number(fixture.fetched.usdJpyAskClose23) * 1.003).toFixed(6));
+  // Match the actual HTML input steps so native form validation allows submit.
+  const manualRate = Number((fixture.positionRate * 1.007).toFixed(4));
+  const manualUsdJpy = Number((Number(fixture.fetched.usdJpyAskClose23) * 1.003).toFixed(3));
   const manualSwap = 100.25;
   await page.locator('#dailyRate').fill(String(manualRate));
   await page.locator('#dailyUsdJpy').fill(String(manualUsdJpy));
@@ -146,7 +147,7 @@ try {
   // Position editing is tested as a transformation from the saved value, not a production position fixture.
   const initialLots = 1;
   const editedLots = initialLots * 2.5;
-  const editedRate = Number((fixture.positionRate * 0.99).toFixed(6));
+  const editedRate = Number((fixture.positionRate * 0.99).toFixed(4));
   await page.locator('[data-tab="positions"]').click();
   await page.locator('#togglePositionFormBtn').click();
   await page.locator('#positionDate').fill(fixture.earliestDate);
