@@ -68,6 +68,17 @@
     return { status: 'pending', sourceDate, displayDate, weekend: false, row: null, shortPerLot: 0, longPerLot: 0 };
   };
 
+  const noteText = (current, date) => {
+    if (current.status === 'official') {
+      const row = current.row || {};
+      return `ヒロセ ${current.sourceDate}表記 → ${current.displayDate}表示 · ${Number(row.days || 0)}日分 · ${Number(row.unit || 1000).toLocaleString()}通貨 ${Number(row.sellJpy || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円 → ${Number(state.settings.unitsPerLot || 1000).toLocaleString()}通貨 ${Number(current.shortPerLot || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
+    }
+    if (current.status === 'pending') return `${current.sourceDate}分 未確定 → ${current.displayDate}表示は現在0円`;
+    return current.weekend
+      ? `${date}は週末のため表示Swap 0円`
+      : `${current.sourceDate}はヒロセ表記なし → ${current.displayDate}表示Swap 0円`;
+  };
+
   const settle = (prefix) => {
     if (!isHirose()) return;
     const date = document.getElementById(`${prefix}Date`)?.value || '';
@@ -85,27 +96,35 @@
 
     const note = input.closest('label')?.querySelector('.swap-source-note');
     if (!note) return;
-    if (current.status === 'official') {
-      const row = current.row || {};
-      note.textContent = `ヒロセ ${current.sourceDate}表記 → ${current.displayDate}表示 · ${Number(row.days || 0)}日分 · ${Number(row.unit || 1000).toLocaleString()}通貨 ${Number(row.sellJpy || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円 → ${Number(state.settings.unitsPerLot || 1000).toLocaleString()}通貨 ${Number(current.shortPerLot || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
-    } else if (current.status === 'pending') {
-      note.textContent = `${current.sourceDate}分 未確定 → ${current.displayDate}表示は現在0円`;
-    } else {
-      note.textContent = current.weekend
-        ? `${date}は週末のため表示Swap 0円`
-        : `${current.sourceDate}はヒロセ表記なし → ${current.displayDate}表示Swap 0円`;
-    }
+    const expected = noteText(current, date);
+    if (note.textContent !== expected) note.textContent = expected;
   };
 
   const settleBurst = (prefix) => {
-    [0, 20, 80, 250, 750].forEach((delay) => setTimeout(() => settle(prefix), delay));
+    [0, 20, 80, 250, 750, 1500].forEach((delay) => setTimeout(() => settle(prefix), delay));
   };
   const settleNowAndBurst = (prefix) => {
     // WebKit can expose a legacy writer's pending flag before a zero-delay timer runs.
     // Write the shifted-calendar value/note synchronously first, then keep the burst to
     // defeat later async legacy writers and feed refreshes.
     settle(prefix);
+    queueMicrotask(() => settle(prefix));
     settleBurst(prefix);
+  };
+
+  const installNoteObserver = (prefix) => {
+    const input = document.getElementById(`${prefix}Swap`);
+    const note = input?.closest('label')?.querySelector('.swap-source-note');
+    if (!note || note.dataset.shiftedSwapNoteGuard === '1') return;
+    note.dataset.shiftedSwapNoteGuard = '1';
+    const observer = new MutationObserver(() => {
+      if (!isHirose()) return;
+      const date = document.getElementById(`${prefix}Date`)?.value || '';
+      if (!date) return;
+      const expected = noteText(resolveDisplay(date), date);
+      if (note.textContent !== expected) note.textContent = expected;
+    });
+    observer.observe(note, { childList: true, characterData: true, subtree: true });
   };
 
   const originalFillDailyForm = fillDailyForm;
@@ -124,6 +143,7 @@
     // phase so our synchronous write is the final visible state of the same event tick.
     dateInput.addEventListener('input', schedule);
     dateInput.addEventListener('change', schedule);
+    installNoteObserver(prefix);
   });
 
   const observer = new MutationObserver((mutations) => {
@@ -136,6 +156,8 @@
       'data-live-rate-refresh-ready',
       'data-reference-data-rebuilt-at'
     ].includes(mutation.attributeName))) return;
+    installNoteObserver('daily');
+    installNoteObserver('quickDaily');
     settleNowAndBurst('daily');
     settleNowAndBurst('quickDaily');
   });
@@ -154,6 +176,8 @@
 
   root.dataset.hiroseSwapInputRule = 'previous-business-day-source-next-business-day-display';
   root.dataset.shiftedSwapUiGuard = '1';
+  installNoteObserver('daily');
+  installNoteObserver('quickDaily');
   settleNowAndBurst('daily');
   settleNowAndBurst('quickDaily');
 })();
