@@ -22,6 +22,15 @@ const nextBusinessDate = (sourceDate) => {
   while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 };
+const closeSettingsIfOpen = async () => {
+  const drawer = page.locator('#settingsDrawer');
+  const isOpen = (await drawer.getAttribute('aria-hidden')) === 'false';
+  if (isOpen) {
+    const close = page.locator('#closeSettingsBtn');
+    if (await close.isVisible()) await close.click();
+  }
+  await page.waitForFunction(() => document.querySelector('#settingsDrawer')?.getAttribute('aria-hidden') === 'true', { timeout: 5000 });
+};
 
 try {
   console.log('BROWSER=', browserName);
@@ -113,7 +122,7 @@ try {
   assert.equal(Number(await page.locator('#settingUnits').inputValue()), 1000);
   assert.equal(await page.locator('#settingSwapMode').count(), 1);
   await page.locator('#settingSwapMode').selectOption('hirose');
-  await page.locator('#closeSettingsBtn').click();
+  await closeSettingsIfOpen();
   await page.waitForFunction(() => document.documentElement.dataset.swapInputMode === 'hirose', { timeout: 5000 });
 
   const ruleCheck = await page.evaluate(({ first, multi }) => ({
@@ -178,7 +187,7 @@ try {
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('manual');
   await page.locator('#settingRateSource').selectOption('manual');
-  await page.locator('#closeSettingsBtn').click();
+  await closeSettingsIfOpen();
   const manualDate = nextBusinessDate(fixture.last.creditDate);
   await page.locator('#dailyDate').fill(manualDate);
   await page.locator('#dailyDate').dispatchEvent('change');
