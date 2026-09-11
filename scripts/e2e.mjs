@@ -47,7 +47,9 @@ try {
     hiroseHistoryAccounting: '1',
     calendarBreakdown: '1',
     calendarMobileCompact: '1',
-    sameDaySwapValuation: '1',
+    valuationUi: '1',
+    backendCore: '1',
+    backendCoreReady: '1',
     shiftedSwapDisplay: '1',
     shiftedSwapAccountingActive: '1'
   })) {
@@ -124,6 +126,7 @@ try {
   await page.locator('#settingSwapMode').selectOption('hirose');
   await closeSettingsIfOpen();
   await page.waitForFunction(() => document.documentElement.dataset.swapInputMode === 'hirose', { timeout: 5000 });
+  await page.waitForFunction(() => saveDailyFrom?.__dtlCanonicalBackend === true && derivedDaily?.__dtlCanonicalBackend === true, { timeout: 5000 });
 
   const ruleCheck = await page.evaluate(({ first, multi }) => ({
     firstResolution: window.__DTL_HIROSE_SWAP_RESOLUTION__?.(first.creditDate) || null,
@@ -210,6 +213,11 @@ try {
   assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), true);
   await page.locator('#closeBackupBtn').click();
   console.log('mobile backup access: PASS');
+
+  const backendStats = await page.evaluate(() => window.__DTL_BACKEND_STATS__?.() || null);
+  assert.ok(backendStats && backendStats.derivedComputations >= 1, 'canonical backend stats unavailable');
+  assert.ok(backendStats.derivedCacheHits >= 1, `canonical derived cache was not reused: ${JSON.stringify(backendStats)}`);
+  console.log('canonical backend stats=', backendStats);
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`E2E (${browserName}): PASS`);
