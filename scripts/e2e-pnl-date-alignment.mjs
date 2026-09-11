@@ -23,6 +23,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.pnlDateAlignment === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.backendCoreReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.swapPresentationRule === 'cumulative-lines-shifted-next-business-day', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.calendarRendererPreserved === '1', { timeout: 15000 });
 
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('hirose');
@@ -91,6 +92,12 @@ try {
   near(result.credit.dailySwap, result.accountingCredit - result.accountingSource, 'credit-date daily breakdown must contain the shifted swap');
   near(result.credit.dailyPnl, Number(result.credit.dailyFxPnl) + Number(result.credit.dailySwap), 'daily breakdown Net identity');
 
+  // The existing calendar renderer must remain in charge of DOM/CSS presentation.
+  // Its own E2E suite verifies the compact mobile calendar and source-day badge.
+  await page.locator('[data-tab="calendar"]').click();
+  assert.equal(await page.locator('.calendar-grid').count(), 1, 'original calendar grid is missing');
+  assert.equal(await page.locator('.calendar-weekdays span').count(), 7, 'original seven-column calendar header is missing');
+
   await page.locator('[data-tab="overview"]').click();
   await page.waitForFunction(() => {
     const chart = window.Chart?.getChart(document.querySelector('#overviewChart'));
@@ -133,7 +140,7 @@ try {
   near(chart.totalTension, 0.25, 'original total line tension');
   near(chart.fxTension, 0.25, 'original FX line tension');
   near(chart.swapTension, 0.25, 'original Swap line tension');
-  console.log('cumulative line design + next-business-day swap jump: PASS');
+  console.log('original calendar renderer + cumulative line design + next-business-day swap jump: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`PNL DATE ALIGNMENT E2E (${browserName}): PASS`);
