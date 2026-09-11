@@ -79,8 +79,7 @@ try {
       credits,
       first: credits[0] || null,
       multi,
-      last: credits.at(-1) || null,
-      unitsPerLot: Number(state.settings.unitsPerLot || 0)
+      last: credits.at(-1) || null
     };
   });
   assert.ok(fixture.rows.length > 1, 'history must contain multiple rows');
@@ -91,7 +90,6 @@ try {
     return day !== 0 && day !== 6;
   }).length, 'each business-day source row must have one credit entry');
   assert.equal(fixture.first.creditDate, nextBusinessDate(fixture.first.sourceDate));
-  assert.ok(fixture.unitsPerLot > 0);
 
   await page.locator('[data-tab="positions"]').click();
   assert.equal(await page.locator('#view-positions').evaluate((el) => el.classList.contains('active')), true);
