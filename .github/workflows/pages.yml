@@ -39,6 +39,7 @@ jobs:
           node --check patch-live-rate-refresh-20260910.js
           node --check patch-same-day-swap-valuation-20260911.js
           node --check patch-same-day-swap-reinforce-20260911.js
+          node --check patch-shifted-swap-display-20260911.js
           node --check scripts/e2e-hirose-rates.mjs
           node --check scripts/e2e-live-rate-refresh.mjs
           node --check scripts/e2e-close-conversion.mjs
