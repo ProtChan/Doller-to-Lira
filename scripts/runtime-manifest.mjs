@@ -16,7 +16,6 @@ export const SOURCE_FILES = [
   'patch-swap-precision-20260906.js',
   'patch-hirose-history-20260906.js',
   'patch-hirose-rate-history-20260907.js',
-  'patch-hirose-input-settle-20260909.js',
   'patch-close-conversion-20260908.js',
   'patch-capital-history-20260908.js',
   'patch-rate-source-edit-performance-20260908.js',
@@ -25,17 +24,26 @@ export const SOURCE_FILES = [
   'patch-reference-data-rebuild-20260909.js',
   'patch-private-publisher-daily-layout-20260909.js',
   'patch-live-rate-refresh-20260910.js',
+  // Valuation UI is deliberately separated from accounting semantics.
+  'patch-valuation-ui-20260911.js',
+  // One authoritative swap calendar: source date -> next business-day display.
+  'patch-shifted-swap-display-20260911.js',
+  'patch-shifted-swap-ui-guard-20260911.js',
+  // Final hot-path owner. Replaces the historical save/derived wrapper chain with
+  // one canonical persistence and accounting backend plus a derived-row cache.
+  'patch-backend-final-20260911.js'
+];
+
+// Not in production: the old pending/same-day/reinforcement layers are retained in
+// the repository only as migration history. Their behavior is superseded by the
+// shifted-swap layer and canonical final backend above.
+export const RETIRED_RUNTIME_FILES = [
+  'patch-hirose-input-settle-20260909.js',
+  'patch-hirose-pending-20260907.js',
+  'patch-hirose-pending-bootstrap-20260907.js',
   'patch-same-day-swap-valuation-20260911.js',
   'patch-same-day-swap-reinforce-20260911.js',
-  'patch-valuation-save-final-20260911.js',
-  // Provisional-swap handling used to be fetched by a bootstrap script after the
-  // async feeds settled. It is safe to install after the other synchronous wrappers;
-  // its observer reconciles again when the feeds become ready.
-  'patch-hirose-pending-20260907.js',
-  // Final authoritative semantics must remain last so older compatibility layers
-  // cannot overwrite next-business-day swap accounting.
-  'patch-shifted-swap-display-20260911.js',
-  'patch-shifted-swap-ui-guard-20260911.js'
+  'patch-valuation-save-final-20260911.js'
 ];
 
 export const PUBLIC_FILES = [
