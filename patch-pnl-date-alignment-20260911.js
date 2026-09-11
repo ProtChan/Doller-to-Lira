@@ -1,14 +1,16 @@
 // Presentation-only PnL date alignment.
 // Accounting/cumulative totals remain owned by the canonical backend. This layer
-// keeps daily calendar breakdowns aligned to the shifted Hirose credit date while
-// preserving the original cumulative line-chart presentation.
+// preserves the original cumulative line-chart presentation while leaving the
+// established calendar renderer/design completely untouched.
 (() => {
   const root = document.documentElement;
   if (root.dataset.pnlDateAlignment === '1') return;
 
   const accountingDerivedDaily = derivedDaily;
-  const baseRenderCalendar = renderCalendar;
 
+  // Expose daily movements for diagnostics/tests without replacing the canonical
+  // derived rows or the calendar renderer. The canonical backend already owns the
+  // shifted next-business-day swap timing used by the calendar.
   const presentationRows = () => {
     const rows = accountingDerivedDaily();
     let previousFx = 0;
@@ -33,22 +35,9 @@
 
   window.__DTL_PRESENTATION_DAILY__ = () => presentationRows().map((row) => ({ ...row }));
 
-  // Calendar breakdown uses the same visible daily buckets. The accounting function
-  // itself remains untouched; only the rows passed to the calendar renderer carry
-  // daily deltas derived from the already-shifted cumulative totals.
-  renderCalendar = function() {
-    const currentDerived = derivedDaily;
-    try {
-      derivedDaily = presentationRows;
-      return baseRenderCalendar.apply(this, arguments);
-    } finally {
-      derivedDaily = currentDerived;
-    }
-  };
-
-  // Restore the original cumulative overview chart design. The cumulative swap
-  // series comes from canonical accounting, so its jump occurs on the shifted next
-  // business-day credit date rather than the broker source date.
+  // Restore/preserve the original cumulative overview chart design. The cumulative
+  // swap series comes from canonical accounting, so its jump still occurs on the
+  // shifted next-business-day credit date rather than the broker source date.
   renderOverviewChart = function() {
     if (activeTab !== 'overview' || typeof Chart === 'undefined' || !$('overviewChart')) return;
     destroyChart('overviewChart');
@@ -138,7 +127,7 @@
 
   root.dataset.pnlDateAlignment = '1';
   root.dataset.swapPresentationRule = 'cumulative-lines-shifted-next-business-day';
+  root.dataset.calendarRendererPreserved = '1';
 
-  try { renderCalendar(); } catch (_) {}
   if (activeTab === 'overview') requestAnimationFrame(() => { try { renderOverviewChart(); } catch (_) {} });
 })();
