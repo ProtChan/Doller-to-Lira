@@ -22,6 +22,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.pnlDateAlignment === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.backendCoreReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.swapPresentationRule === 'cumulative-lines-shifted-next-business-day', { timeout: 15000 });
 
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('hirose');
@@ -86,38 +87,53 @@ try {
   assert.ok(result.source && result.credit, 'presentation rows for source/credit dates are missing');
   near(result.accountingSource, 0, 'source-date cumulative swap must stay unchanged for a same-day-opened position');
   near(result.accountingCredit, Number(fixture.credit.row.sellJpy), 'credit-date cumulative swap');
-  near(result.source.dailySwap, 0, 'source-date displayed daily swap must be zero');
-  near(result.credit.dailySwap, result.accountingCredit - result.accountingSource, 'next-business-day displayed daily swap');
-  near(result.credit.dailyPnl, Number(result.credit.dailyFxPnl) + Number(result.credit.dailySwap), 'displayed daily Net identity');
+  near(result.source.dailySwap, 0, 'source-date daily breakdown must not show the shifted swap');
+  near(result.credit.dailySwap, result.accountingCredit - result.accountingSource, 'credit-date daily breakdown must contain the shifted swap');
+  near(result.credit.dailyPnl, Number(result.credit.dailyFxPnl) + Number(result.credit.dailySwap), 'daily breakdown Net identity');
 
   await page.locator('[data-tab="overview"]').click();
   await page.waitForFunction(() => {
     const chart = window.Chart?.getChart(document.querySelector('#overviewChart'));
-    return chart?.data?.datasets?.some((dataset) => String(dataset.label).includes('翌営業日計上'));
+    const labels = chart?.data?.datasets?.map((dataset) => String(dataset.label)) || [];
+    return chart?.config?.type === 'line'
+      && labels.includes('総損益')
+      && labels.includes('為替差損益')
+      && labels.includes('累積Swap');
   }, { timeout: 5000 });
 
   const chart = await page.evaluate(({ sourceDate, creditDate }) => {
     const instance = window.Chart.getChart(document.querySelector('#overviewChart'));
     const labels = instance.data.labels.map(String);
-    const swap = instance.data.datasets.find((dataset) => String(dataset.label).includes('日次Swap'));
-    const fx = instance.data.datasets.find((dataset) => String(dataset.label) === '日次FX');
-    const net = instance.data.datasets.find((dataset) => String(dataset.label) === '日次Net');
+    const swap = instance.data.datasets.find((dataset) => String(dataset.label) === '累積Swap');
+    const fx = instance.data.datasets.find((dataset) => String(dataset.label) === '為替差損益');
+    const total = instance.data.datasets.find((dataset) => String(dataset.label) === '総損益');
     const sourceLabel = sourceDate.slice(5);
     const creditLabel = creditDate.slice(5);
     return {
+      chartType: instance.config.type,
       sourceIndex: labels.indexOf(sourceLabel),
       creditIndex: labels.indexOf(creditLabel),
       swap: swap?.data || [],
       fx: fx?.data || [],
-      net: net?.data || []
+      total: total?.data || [],
+      totalFill: total?.fill,
+      totalTension: total?.tension,
+      fxTension: fx?.tension,
+      swapTension: swap?.tension
     };
   }, { sourceDate: fixture.credit.sourceDate, creditDate: fixture.credit.creditDate });
 
+  assert.equal(chart.chartType, 'line', 'overview PnL must remain a cumulative line chart');
   assert.ok(chart.sourceIndex >= 0 && chart.creditIndex >= 0, 'chart labels are missing the source/credit dates');
-  near(chart.swap[chart.sourceIndex], 0, 'chart must not plot the swap on the broker source date');
-  near(chart.swap[chart.creditIndex], result.credit.dailySwap, 'chart must plot the swap on the next business day');
-  near(chart.net[chart.creditIndex], Number(chart.fx[chart.creditIndex]) + Number(chart.swap[chart.creditIndex]), 'chart Net must equal same-bucket FX + Swap');
-  console.log('source-date zero + next-business-day swap chart placement: PASS');
+  near(chart.swap[chart.sourceIndex], result.accountingSource, 'cumulative Swap line must stay flat on the broker source date');
+  near(chart.swap[chart.creditIndex], result.accountingCredit, 'cumulative Swap line must jump on the next business day');
+  near(chart.total[chart.sourceIndex], Number(chart.fx[chart.sourceIndex]) + Number(chart.swap[chart.sourceIndex]), 'source-date cumulative total identity');
+  near(chart.total[chart.creditIndex], Number(chart.fx[chart.creditIndex]) + Number(chart.swap[chart.creditIndex]), 'credit-date cumulative total identity');
+  assert.equal(chart.totalFill, true, 'original cumulative total fill must be preserved');
+  near(chart.totalTension, 0.25, 'original total line tension');
+  near(chart.fxTension, 0.25, 'original FX line tension');
+  near(chart.swapTension, 0.25, 'original Swap line tension');
+  console.log('cumulative line design + next-business-day swap jump: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
   console.log(`PNL DATE ALIGNMENT E2E (${browserName}): PASS`);
