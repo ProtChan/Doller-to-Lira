@@ -28,13 +28,13 @@ try {
     calendarBreakdown: '1',
     calendarMobileCompact: '1',
     sameDaySwapValuation: '1',
-    sameDaySwapReinforce: '1',
-    sameDaySwapAccountingActive: '1'
+    shiftedSwapDisplay: '1',
+    shiftedSwapAccountingActive: '1'
   })) {
     await page.waitForFunction(({ key, value }) => document.documentElement.dataset[key] === value, { key, value }, { timeout: 15000 });
   }
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCreditRule === 'same-day-table-date', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapEntitlementRule === 'table-date-open-exclusive-close-inclusive', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCreditRule === 'next-business-day-display-open-exclusive-close-inclusive', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapEntitlementRule === 'display-date-open-exclusive-close-inclusive', { timeout: 15000 });
 
   const marginBands = await page.evaluate(() => ({
     at155: window.__DTL_MARGIN_PER_1000__(155),
@@ -79,22 +79,23 @@ try {
       start: document.documentElement.dataset.hiroseHistoryStart,
       records: rows.length,
       jul2: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-02') || null,
-      sep3: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-09-03') || null,
-      openedSameDay: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: '2026-09-03', side: 'short', lots: 1 }, '2026-09-03'),
-      openedBefore: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: '2026-09-02', side: 'short', lots: 1 }, '2026-09-03')
+      sep4: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-09-04') || null,
+      openedOnDisplayDay: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: '2026-09-04', side: 'short', lots: 1 }, '2026-09-04'),
+      openedOnSourceDay: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: '2026-09-03', side: 'short', lots: 1 }, '2026-09-04')
     };
   });
   assert.equal(history.start, '2026-07-01');
   assert.ok(history.records >= 47);
+  assert.equal(history.jul2?.sourceDate, '2026-07-01');
   assert.equal(history.jul2?.creditDate, '2026-07-02');
-  assert.equal(history.jul2?.shortPerLot, 346.81);
-  assert.equal(history.jul2?.row?.days, 3);
-  assert.equal(history.sep3?.creditDate, '2026-09-03');
-  assert.equal(history.sep3?.shortPerLot, 473.94);
-  assert.equal(history.sep3?.row?.days, 4);
-  assert.equal(history.openedSameDay, 0);
-  assert.ok(Math.abs(history.openedBefore - 473.94) < 1e-9);
-  console.log('same-day Hirose multi-day accounting: PASS');
+  assert.equal(history.jul2?.shortPerLot, 116.3);
+  assert.equal(history.sep4?.sourceDate, '2026-09-03');
+  assert.equal(history.sep4?.creditDate, '2026-09-04');
+  assert.equal(history.sep4?.shortPerLot, 473.94);
+  assert.equal(history.sep4?.row?.days, 4);
+  assert.equal(history.openedOnDisplayDay, 0);
+  assert.ok(Math.abs(history.openedOnSourceDay - 473.94) < 1e-9);
+  console.log('next-business-day Hirose accounting: PASS');
 
   await page.locator('[data-tab="daily"]').click();
   assert.equal(await page.locator('#dailyValuationTryJpy').count(), 1);
@@ -102,16 +103,15 @@ try {
 
   await page.locator('#dailyDate').fill('2026-07-02');
   await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 346.81) < 1e-9, { timeout: 5000 });
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-02付与/);
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /3日分/);
+  await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 116.3) < 1e-9, { timeout: 5000 });
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-07-01表記.*2026-07-02表示/);
 
-  await page.locator('#dailyDate').fill('2026-09-03');
+  await page.locator('#dailyDate').fill('2026-09-04');
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 473.94) < 1e-9, { timeout: 5000 });
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-03付与/);
+  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-03表記.*2026-09-04表示/);
   assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /4日分/);
-  console.log('daily same-day auto-fill: PASS');
+  console.log('daily shifted auto-fill: PASS');
 
   await page.locator('#dailyRate').fill('50.0000');
   await page.locator('#dailyUsdJpy').fill('160.000');
@@ -119,12 +119,13 @@ try {
   assert.ok(Math.abs(synthetic - 3.2) < 1e-6, `synthetic TRYJPY=${synthetic}`);
   await page.locator('#dailyValuationTryJpy').fill('3.150001');
   await page.locator('#dailyForm button[type="submit"]').click();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dollar-to-lira:v1')).daily.find((row) => row.date === '2026-09-03'));
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dollar-to-lira:v1')).daily.find((row) => row.date === '2026-09-04'));
   assert.equal(saved.valuationTryJpy, 3.150001);
   assert.equal(saved.valuationTryJpySource, 'manual');
   assert.equal(saved.swapSourceDate, '2026-09-03');
-  assert.equal(saved.swapCreditDate, '2026-09-03');
+  assert.equal(saved.swapCreditDate, '2026-09-04');
   assert.equal(saved.swapSourceDays, 4);
+  assert.equal(saved.swapPerLot, 473.94);
   console.log('actual TRYJPY valuation override: PASS');
 
   await page.locator('#openSettingsBtn').click();
