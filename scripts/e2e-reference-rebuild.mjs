@@ -18,6 +18,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.hirosePendingEntries === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.askDayHighReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.referenceDataRebuild === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.shiftedSwapDisplay === '1', { timeout: 15000 });
 
   const highChecks = await page.evaluate(() => ({
     records: Number(document.documentElement.dataset.askDayHighRecords || 0),
@@ -58,7 +59,7 @@ try {
   assert.equal(rebuilt?.ok, true, `reference rebuild failed: ${JSON.stringify(rebuilt)}`);
   assert.equal(rebuilt.rows, highChecks.records, `reference rebuild should restore every published rate day: ${JSON.stringify(rebuilt)}`);
   assert.equal(rebuilt.highs, highChecks.records, `reference rebuild should restore every known daily high: ${JSON.stringify(rebuilt)}`);
-  assert.ok(rebuilt.swaps >= rebuilt.rows - 2, `reference rebuild lost too many official same-day swap rows: ${JSON.stringify(rebuilt)}`);
+  assert.ok(rebuilt.swaps >= rebuilt.rows - 2, `reference rebuild lost too many official shifted swap rows: ${JSON.stringify(rebuilt)}`);
 
   const stateChecks = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
@@ -70,6 +71,7 @@ try {
         return d === 0 || d === 6;
       }).map((row) => row.date),
       jul1: byDate['2026-07-01'] || null,
+      jul2: byDate['2026-07-02'] || null,
       jul4: byDate['2026-07-04'] || null,
       jul10: byDate['2026-07-10'] || null,
       sep3: byDate['2026-09-03'] || null,
@@ -86,23 +88,29 @@ try {
   assert.equal(Number(stateChecks.jul1?.usdTryAskDayHigh), 46.7319, 'Jul 1 daily high was not restored');
   assert.equal(stateChecks.jul1?.rateSourceTimeframe, '4h', 'Jul 1 source timeframe should be 4h');
   assert.equal(stateChecks.jul1?.rateSourceBarTime, '20:00 JST', 'Jul 1 source bar should be 20:00');
-  assert.equal(Number(stateChecks.jul1?.swapPerLot), 116.3, 'Jul 1 must use the Jul 1 broker-table swap row');
-  assert.equal(stateChecks.jul1?.swapSourceDate, '2026-07-01', 'Jul 1 swap source date must be the same calendar date');
+  assert.equal(Number(stateChecks.jul1?.swapPerLot), 0, 'Jul 1 has no prior source row in retained history, so shifted display swap must be zero');
+  assert.equal(Number(stateChecks.jul2?.swapPerLot), 116.3, 'Jul 2 must display the Jul 1 broker-table swap row');
+  assert.equal(stateChecks.jul2?.swapSourceDate, '2026-07-01', 'Jul 2 shifted swap source date must be Jul 1');
+  assert.equal(stateChecks.jul2?.swapCreditDate, '2026-07-02', 'Jul 2 shifted swap display date must be Jul 2');
   assert.equal(Number(stateChecks.jul10?.usdTryAskDayHigh), 47.0635, 'Jul 10 daily high was not restored');
   assert.equal(Number(stateChecks.sep3?.rate), 48.3153, 'Sep 3 USD/TRY was not restored');
   assert.equal(Number(stateChecks.sep3?.usdJpy), 155.422, 'Sep 3 USD/JPY was not restored');
   assert.equal(Number(stateChecks.sep3?.usdTryAskDayHigh), 48.4657, 'Sep 3 daily high was not restored');
-  assert.equal(Number(stateChecks.sep3?.swapPerLot), 473.94, 'Sep 3 four-day swap must remain on Sep 3');
-  assert.equal(stateChecks.sep3?.swapSourceDate, '2026-09-03', 'Sep 3 swap source date must be Sep 3');
-  assert.equal(Number(stateChecks.sep3?.swapSourceDays), 4, 'Sep 3 must retain its four-day marker');
-  assert.equal(Number(stateChecks.sep4?.swapPerLot), 0, 'Sep 4 broker-table swap is zero and must not inherit Sep 3');
-  assert.equal(stateChecks.sep4?.swapSourceDate, '2026-09-04', 'Sep 4 zero row must remain dated Sep 4');
-  assert.equal(Number(stateChecks.sep8?.swapPerLot), 115.85, 'Sep 8 must use the Sep 8 broker-table swap row');
-  assert.equal(stateChecks.sep8?.swapSourceDate, '2026-09-08', 'Sep 8 swap source date must be Sep 8');
+  assert.equal(Number(stateChecks.sep3?.swapPerLot), 118.26, 'Sep 3 must display the Sep 2 broker-table swap row');
+  assert.equal(stateChecks.sep3?.swapSourceDate, '2026-09-02', 'Sep 3 shifted swap source date must be Sep 2');
+  assert.equal(stateChecks.sep3?.swapCreditDate, '2026-09-03', 'Sep 3 shifted display date must be Sep 3');
+  assert.equal(Number(stateChecks.sep4?.swapPerLot), 473.94, 'Sep 4 must display the Sep 3 four-day swap');
+  assert.equal(stateChecks.sep4?.swapSourceDate, '2026-09-03', 'Sep 4 shifted swap source date must be Sep 3');
+  assert.equal(stateChecks.sep4?.swapCreditDate, '2026-09-04', 'Sep 4 shifted display date must be Sep 4');
+  assert.equal(Number(stateChecks.sep4?.swapSourceDays), 4, 'Sep 4 must carry the Sep 3 four-day marker');
+  assert.equal(Number(stateChecks.sep8?.swapPerLot), 116.22, 'Sep 8 must display the Sep 7 broker-table swap row');
+  assert.equal(stateChecks.sep8?.swapSourceDate, '2026-09-07', 'Sep 8 shifted swap source date must be Sep 7');
   assert.equal(Number(stateChecks.sep9?.rate), 48.4787, 'Sep 9 USD/TRY was not restored');
   assert.equal(Number(stateChecks.sep9?.usdJpy), 153.21, 'Sep 9 USD/JPY was not restored');
-  assert.equal(Number(stateChecks.sep9?.usdTryAskDayHigh), 48.5472, 'Sep 9 daily high was not restored');
-  console.log('reset -> one-click complete reference data rebuild with same-day swap dates: PASS');
+  assert.equal(Number(stateChecks.sep9?.usdTryAskDayHigh), 48.5472, 'Sep 9 ASK high was not restored');
+  assert.equal(Number(stateChecks.sep9?.swapPerLot), 115.85, 'Sep 9 must display the Sep 8 broker-table swap row');
+  assert.equal(stateChecks.sep9?.swapSourceDate, '2026-09-08', 'Sep 9 shifted swap source date must be Sep 8');
+  console.log('reset -> one-click complete reference data rebuild with shifted swap display dates: PASS');
 
   await page.locator('[data-tab="risk"]').click();
   await page.waitForFunction(() => {
