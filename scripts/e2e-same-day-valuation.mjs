@@ -21,6 +21,19 @@ const closeSettingsIfOpen = async () => {
   }
   await page.waitForFunction(() => document.querySelector('#settingsDrawer')?.getAttribute('aria-hidden') === 'true', { timeout: 5000 });
 };
+const showCalendarMonth = async (date) => {
+  const [targetYear, targetMonth] = date.split('-').map(Number);
+  const targetIndex = targetYear * 12 + targetMonth - 1;
+  for (let attempts = 0; attempts < 36; attempts += 1) {
+    const title = (await page.locator('#calendarTitle').innerText()).trim();
+    const match = title.match(/(\d{4})\s*\/\s*(\d{1,2})/);
+    assert.ok(match, `unparseable calendar title: ${title}`);
+    const currentIndex = Number(match[1]) * 12 + Number(match[2]) - 1;
+    if (currentIndex === targetIndex) return;
+    await page.locator(currentIndex > targetIndex ? '#prevMonthBtn' : '#nextMonthBtn').click();
+  }
+  assert.fail(`calendar did not reach ${date.slice(0, 7)}`);
+};
 
 try {
   console.log('VALUATION RULE E2E BROWSER=', browserName);
@@ -122,6 +135,10 @@ try {
   assert.ok((await swapCell.innerText()).includes(`${sourceDays}日分`), 'daily table must show the broker source-day count');
 
   await page.locator('[data-tab="calendar"]').click();
+  // The calendar intentionally opens on the latest stored month. The fixture may
+  // be an older multi-day source row, so navigate through the actual month controls
+  // before asserting the display-date cell.
+  await showCalendarMonth(displayDate);
   const calendarCell = page.locator(`.calendar-day[data-date="${displayDate}"]`);
   assert.equal(await calendarCell.count(), 1, 'calendar cell for the saved display date is missing');
   assert.ok((await calendarCell.innerText()).includes(`S×${sourceDays}`), 'calendar must mark the source-day count on the display date');
