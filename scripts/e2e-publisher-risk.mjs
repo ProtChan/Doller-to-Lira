@@ -6,31 +6,45 @@ const browserName = (process.env.BROWSER || 'chromium').toLowerCase();
 const browserType = browserName === 'webkit' ? webkit : chromium;
 const browser = await browserType.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+const near = (actual, expected, label) => assert.ok(
+  Math.abs(Number(actual) - Number(expected)) < 1e-8,
+  `${label}: expected ${expected}, got ${actual}`
+);
 
 try {
-  // Owner-only publisher remains directly reachable, but must not be linked from the public app.
+  const feedResponse = await context.request.get(new URL('data/hirose-ask-close-23.json', baseUrl).href);
+  assert.equal(feedResponse.ok(), true, `publisher fixture feed failed: ${feedResponse.status()}`);
+  const feed = await feedResponse.json();
+  const feedRows = (Array.isArray(feed?.history) ? feed.history : [])
+    .filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  assert.ok(feedRows.length > 0, 'publisher test requires a published rate row');
+  const publisherBase = feedRows.at(-1);
+  const publisherValues = {
+    date: publisherBase.date,
+    usdTryAskClose23: Number((Number(publisherBase.usdTryAskClose23) * 1.001).toFixed(6)),
+    usdJpyAskClose23: Number((Number(publisherBase.usdJpyAskClose23) * 1.0015).toFixed(6)),
+    usdTryAskDayHigh: Number((Number(publisherBase.usdTryAskClose23) * 1.005).toFixed(6)),
+    usdJpyAskDayHigh: Number((Number(publisherBase.usdJpyAskClose23) * 1.004).toFixed(6))
+  };
+
+  // Owner-only publisher serializes exactly what was entered, independent of any production snapshot.
   const publisher = await context.newPage();
   await publisher.goto(new URL('publish.html', baseUrl).href, { waitUntil: 'domcontentloaded' });
-  await publisher.locator('#date').fill('2026-09-08');
-  await publisher.locator('#usdTryClose').fill('48.4610');
-  await publisher.locator('#usdJpyClose').fill('154.005');
-  await publisher.locator('#usdTryHigh').fill('48.9000');
-  await publisher.locator('#usdJpyHigh').fill('155.100');
+  await publisher.locator('#date').fill(publisherValues.date);
+  await publisher.locator('#usdTryClose').fill(String(publisherValues.usdTryAskClose23));
+  await publisher.locator('#usdJpyClose').fill(String(publisherValues.usdJpyAskClose23));
+  await publisher.locator('#usdTryHigh').fill(String(publisherValues.usdTryAskDayHigh));
+  await publisher.locator('#usdJpyHigh').fill(String(publisherValues.usdJpyAskDayHigh));
   const issueHref = await publisher.locator('#publish').getAttribute('href');
   assert.ok(issueHref?.startsWith('https://github.com/ProtChan/Doller-to-Lira/issues/new?'), 'publisher did not build GitHub issue URL');
   const issueUrl = new URL(issueHref);
-  assert.equal(issueUrl.searchParams.get('title'), '[HIROSE-RATE] 2026-09-08');
+  assert.equal(issueUrl.searchParams.get('title'), `[HIROSE-RATE] ${publisherValues.date}`);
   const body = issueUrl.searchParams.get('body') || '';
   const match = body.match(/<!-- DTL_HIROSE_RATE_V1\n(\{.*\})\n-->/s);
   assert.ok(match, 'machine-readable publisher payload missing');
-  assert.deepEqual(JSON.parse(match[1]), {
-    date:'2026-09-08',
-    usdTryAskClose23:48.461,
-    usdJpyAskClose23:154.005,
-    usdTryAskDayHigh:48.9,
-    usdJpyAskDayHigh:155.1
-  });
-  console.log(`direct publisher (${browserName}): PASS`);
+  assert.deepEqual(JSON.parse(match[1]), publisherValues);
+  console.log(`publisher serialization invariant (${browserName}): PASS`);
   await publisher.close();
 
   const page = await context.newPage();
@@ -38,26 +52,57 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.askDayHighReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '2', { timeout: 15000 });
 
-  // Give the published high-ASK dates a live short position so stressed maintenance is finite.
-  await page.evaluate(() => {
+  const fixture = await page.evaluate(() => {
+    const rates = (window.__DTL_HIROSE_RATE_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const highs = (window.__DTL_ASK_DAY_HIGH_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTryAskDayHigh) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const eligible = highs.map((high) => ({
+      high,
+      rate: window.__DTL_HIROSE_RATE_AT__?.(high.date) || null
+    })).filter((item) => item.rate && Number(item.rate.usdTryAskClose23) > 0 && Number(item.rate.usdJpyAskClose23) > 0);
+    const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
+    return {
+      rates,
+      eligible,
+      settings: saved.settings || {}
+    };
+  });
+  assert.ok(fixture.rates.length > 0 && fixture.eligible.length > 0, 'risk test requires overlapping rate/high history');
+
+  const settings = fixture.settings;
+  const capital = Number(settings.capital || 0);
+  const unitsPerLot = Number(settings.unitsPerLot || 0);
+  const leverage = Number(settings.leverage || 0);
+  assert.ok(capital > 0 && unitsPerLot > 0 && leverage > 0, 'risk fixture settings must be positive');
+  const firstRisk = fixture.eligible[0];
+  const perLotMargin = unitsPerLot * Number(firstRisk.rate.usdJpyAskClose23) / leverage;
+  const lots = Math.max(1, Math.floor((capital * 0.5) / perLotMargin));
+  const positionDate = fixture.rates[0].date;
+  const entryRate = Number(fixture.rates[0].usdTryAskClose23);
+
+  await page.evaluate(({ positionDate, entryRate, lots }) => {
     const key = 'dollar-to-lira:v1';
     const saved = JSON.parse(localStorage.getItem(key) || '{}');
-    saved.settings = { ...(saved.settings || {}), capital: 500000, unitsPerLot: 1000, lcThreshold: 100 };
     saved.positions = [{
-      id:'worst-ask-risk-test',
-      date:'2026-09-01',
+      id:'worst-ask-risk-invariant',
+      date:positionDate,
       side:'short',
-      entryRate:48.2772,
-      lots:20,
-      memo:'risk overlay test',
+      entryRate,
+      lots,
+      memo:'risk invariant test',
       closeDate:null,
       closeRate:null
     }];
     saved.updatedAt = new Date().toISOString();
     localStorage.setItem(key, JSON.stringify(saved));
-  });
+  }, { positionDate, entryRate, lots });
+
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
@@ -68,8 +113,6 @@ try {
   assert.equal(await page.locator('#openRatePublisherBtn').count(), 0, 'publisher link leaked into public daily UI');
   console.log(`publisher hidden from public UI (${browserName}): PASS`);
 
-  // At desktop width, all daily-entry controls must share the same input baseline even
-  // though USD/TRY and Swap have source notes underneath them.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(100);
   const alignment = await page.evaluate(() => {
@@ -105,7 +148,7 @@ try {
       !!maintenance?.data?.datasets?.some((dataset) => dataset.label === '日中最大ASK時 維持率');
   }, { timeout: 10000 });
 
-  const risk = await page.evaluate(() => {
+  const risk = await page.evaluate((dates) => {
     const lc = Chart.getChart(document.querySelector('#lcChart'));
     const maintenance = Chart.getChart(document.querySelector('#maintenanceChart'));
     const worst = lc.data.datasets.find((dataset) => dataset.label === '日中最大ASK');
@@ -116,38 +159,43 @@ try {
       worstValues: worst?.data || [],
       closeMaintenanceValues: closeMaintenance?.data || [],
       worstMaintenanceValues: worstMaintenance?.data || [],
-      helpers: {
-        sep4: window.__DTL_WORST_ASK_AT__?.('2026-09-04'),
-        sep7: window.__DTL_WORST_ASK_AT__?.('2026-09-07'),
-        sep8: window.__DTL_WORST_ASK_AT__?.('2026-09-08'),
-        sep8Maintenance: window.__DTL_WORST_ASK_MAINTENANCE_AT__?.('2026-09-08')
-      },
+      helpers: dates.map((date) => ({
+        date,
+        high: window.__DTL_WORST_ASK_AT__?.(date),
+        maintenance: window.__DTL_WORST_ASK_MAINTENANCE_AT__?.(date)
+      })),
       lcNote: document.querySelector('#lcChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span')?.textContent || '',
       maintenanceNote: document.querySelector('#maintenanceChart')?.closest('.risk-chart-block')?.querySelector('.chart-title span')?.textContent || '',
       facts: document.querySelector('#riskFacts')?.innerText || ''
     };
-  });
+  }, fixture.eligible.map((item) => item.high.date));
 
-  assert.equal(risk.helpers.sep4, 48.4947, 'Sep 4 published high ASK missing');
-  assert.equal(risk.helpers.sep7, 48.4922, 'Sep 7 published high ASK missing');
-  assert.equal(risk.helpers.sep8, 48.553, 'Sep 8 published high ASK missing');
-  assert.ok(Number.isFinite(risk.helpers.sep8Maintenance), 'worst-ASK maintenance helper is not finite');
+  for (let i = 0; i < fixture.eligible.length; i++) {
+    const item = fixture.eligible[i];
+    const helper = risk.helpers[i];
+    const expectedHigh = Number(item.high.usdTryAskDayHigh);
+    near(helper.high, expectedHigh, `worst ASK helper ${item.high.date}`);
+    assert.ok(Number.isFinite(Number(helper.maintenance)), `worst-ASK maintenance helper is not finite for ${item.high.date}`);
 
-  for (const [label, expected] of [['09-04',48.4947],['09-07',48.4922],['09-08',48.553]]) {
+    const label = item.high.date.slice(5);
     const index = risk.labels.indexOf(label);
-    assert.ok(index >= 0, `${label} missing from risk chart`);
-    assert.equal(Number(risk.worstValues[index]), expected, `${label} high ASK was not plotted`);
-    assert.ok(Number.isFinite(Number(risk.worstMaintenanceValues[index])), `${label} stressed maintenance missing`);
-    assert.ok(
-      Number(risk.worstMaintenanceValues[index]) < Number(risk.closeMaintenanceValues[index]),
-      `${label} short-position stressed maintenance should be below 23:00 maintenance`
-    );
+    assert.ok(index >= 0, `${item.high.date} missing from risk chart`);
+    near(risk.worstValues[index], expectedHigh, `risk chart high ASK ${item.high.date}`);
+    const closeM = Number(risk.closeMaintenanceValues[index]);
+    const worstM = Number(risk.worstMaintenanceValues[index]);
+    assert.ok(Number.isFinite(closeM) && Number.isFinite(worstM), `maintenance values missing for ${item.high.date}`);
+    const closeRate = Number(item.rate.usdTryAskClose23);
+    if (expectedHigh > closeRate + 1e-10) {
+      assert.ok(worstM < closeM, `short risk must worsen when ASK high exceeds close on ${item.high.date}: close=${closeM}, high=${worstM}`);
+    } else {
+      assert.ok(worstM <= closeM + 1e-8, `short risk must not improve at an equal/higher ASK on ${item.high.date}`);
+    }
   }
 
   assert.match(risk.lcNote, /日中最大ASK/);
   assert.match(risk.maintenanceNote, /23:00 USD\/JPY/);
   assert.match(risk.facts, /最大ASK時維持率/);
-  console.log(`three published worst ASK points + stressed maintenance (${browserName}): PASS`);
+  console.log(`all published ASK-high points + short-risk ordering (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
