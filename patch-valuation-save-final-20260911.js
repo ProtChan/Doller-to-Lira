@@ -62,7 +62,15 @@
     if (dateInput) dateInput.value = date;
     if (rateInput && Number(saved.rate) > 0) rateInput.value = String(saved.rate);
     if (usdJpyInput && Number(saved.usdJpy) > 0) usdJpyInput.value = String(saved.usdJpy);
-    if (swapInput && !isHiroseMode() && Number.isFinite(Number(saved.swapPerLot))) swapInput.value = String(saved.swapPerLot);
+
+    if (swapInput) {
+      if (isHiroseMode() && typeof window.__DTL_HIROSE_SWAP_RESOLUTION__ === 'function') {
+        const resolution = window.__DTL_HIROSE_SWAP_RESOLUTION__(date);
+        swapInput.value = String(Number(resolution?.shortPerLot || 0));
+      } else if (Number.isFinite(Number(saved.swapPerLot))) {
+        swapInput.value = String(saved.swapPerLot);
+      }
+    }
 
     if (conversionInput) {
       const explicit = Number(saved.valuationTryJpy);
@@ -107,7 +115,6 @@
       // Make the reset authoritative immediately. Several legacy listeners resync the
       // field asynchronously after tab/date changes; if the saved row still contains
       // the manual override they can put it straight back before the user presses Save.
-      // Clearing it here makes every later resync see the same synthetic state.
       if (saved) {
         delete saved.valuationTryJpy;
         saved.valuationTryJpySource = 'synthetic';
@@ -153,8 +160,6 @@
     const row = state.daily.find((item) => item?.date === payload.date);
     if (!row) return;
 
-    // A late async source writer must never replace values that were visible in the
-    // form at submit time. This is especially important in Manual rate/swap mode.
     if (Number.isFinite(payload.rate) && payload.rate > 0) row.rate = payload.rate;
     if (Number.isFinite(payload.usdJpy) && payload.usdJpy > 0) row.usdJpy = payload.usdJpy;
     if (payload.manualRate) {
@@ -314,9 +319,10 @@
     bindSyntheticResetGuards();
   };
 
-  // Capture the row before the base submit handler runs. The base handler clears the
-  // rate and calls fillDailyForm() with today's date after save; restore the date the
-  // user just saved so "合成値に戻す" still targets that same historical row.
+  // Base submit synchronously refills the form with today's date, and some source
+  // layers then queue their own zero-delay refills. Capture first, persist after the
+  // submit stack, then queue our historical-form restore after those already-queued
+  // source tasks. The editor therefore stays on the row the user actually saved.
   [['dailyForm', 'daily'], ['quickDailyForm', 'quickDaily']].forEach(([formId, prefix]) => {
     const form = document.getElementById(formId);
     if (!form || form.dataset.valuationSaveFinalBound) return;
@@ -325,7 +331,14 @@
       const payload = capture(prefix);
       queueMicrotask(() => {
         persist(payload);
-        restoreSavedForm(prefix, payload.date);
+        setTimeout(() => {
+          restoreSavedForm(prefix, payload.date);
+          // One frame later reassert only if another legacy source task moved the date.
+          requestAnimationFrame(() => {
+            const currentDate = document.getElementById(`${prefix}Date`)?.value;
+            if (currentDate !== payload.date) restoreSavedForm(prefix, payload.date);
+          });
+        }, 0);
       });
     }, true);
   });
