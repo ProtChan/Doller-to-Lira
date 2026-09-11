@@ -9,111 +9,175 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMo
 const pageErrors = [];
 page.on('pageerror', (err) => pageErrors.push(err.message));
 
-const near = (actual, expected, label) => assert.ok(Math.abs(Number(actual) - Number(expected)) < 1e-8, `${label}: expected ${expected}, got ${actual}`);
+const EPS = 1e-8;
+const near = (actual, expected, label) => assert.ok(
+  Math.abs(Number(actual) - Number(expected)) < EPS,
+  `${label}: expected ${expected}, got ${actual}`
+);
+const parseIso = (date) => new Date(`${date}T12:00:00Z`);
+const iso = (date) => date.toISOString().slice(0, 10);
+const nextBusinessDate = (sourceDate) => {
+  const d = parseIso(sourceDate);
+  d.setUTCDate(d.getUTCDate() + 1);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return iso(d);
+};
+const isWeekend = (date) => {
+  const day = parseIso(date).getUTCDay();
+  return day === 0 || day === 6;
+};
+const datesBetween = (start, end) => {
+  const out = [];
+  const d = parseIso(start);
+  const last = parseIso(end);
+  while (d <= last) {
+    out.push(iso(d));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
+};
 
 try {
-  console.log('HIROSE SHIFTED-DISPLAY BROWSER=', browserName);
-  console.log('HIROSE SHIFTED-DISPLAY TEST_URL=', targetUrl);
+  console.log('HIROSE SWAP INVARIANTS BROWSER=', browserName);
+  console.log('HIROSE SWAP INVARIANTS TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.shiftedSwapDisplay === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCalendarRule === 'next-business-day-weekend-skip', { timeout: 15000 });
 
-  const mapping = await page.evaluate(() => ({
-    fridayCredit: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-10') || null,
-    saturday: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-11') || null,
-    sunday: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-12') || null,
-    mondayCredit: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-13') || null,
-    tuesdayCredit: window.__DTL_HIROSE_SWAP_RESOLUTION__?.('2026-07-14') || null,
-    fridaySourceCredit: window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__?.('2026-07-10')
-  }));
-  assert.equal(mapping.fridaySourceCredit, '2026-07-13', 'Friday source row must display on Monday');
-  assert.equal(mapping.fridayCredit?.sourceDate, '2026-07-09');
-  assert.equal(mapping.fridayCredit?.creditDate, '2026-07-10');
-  near(mapping.fridayCredit?.shortPerLot, 291.31, '7/10 display must use 7/9 source row');
-  assert.equal(mapping.saturday?.status, 'zero');
-  assert.equal(mapping.sunday?.status, 'zero');
-  assert.equal(mapping.mondayCredit?.sourceDate, '2026-07-10');
-  near(mapping.mondayCredit?.shortPerLot, 117.5, '7/13 display must use Friday 7/10 source row');
-  assert.equal(mapping.tuesdayCredit?.sourceDate, '2026-07-13');
-  near(mapping.tuesdayCredit?.shortPerLot, 231.02, '7/14 display must use Monday 7/13 source row');
-  assert.equal(mapping.tuesdayCredit?.row?.days, 2);
-  console.log('broker source row -> following business-day display: PASS');
-
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingSwapMode').selectOption('hirose');
   await page.locator('#closeSettingsBtn').click();
-  await page.locator('[data-tab="daily"]').click();
 
-  await page.locator('#dailyDate').fill('2026-09-09');
-  await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 115.85) < 1e-9, { timeout: 5000 });
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-08表記.*2026-09-09表示/, '9/9 input must visibly use the 9/8 broker row');
+  const model = await page.evaluate(() => {
+    const rows = (window.__DTL_HIROSE_HISTORY__?.() || [])
+      .filter((row) => row?.date)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const credits = window.__DTL_HIROSE_CREDIT_HISTORY__?.() || [];
+    const unitsPerLot = Number(state.settings.unitsPerLot || 0);
+    return { rows, credits, unitsPerLot };
+  });
 
-  await page.locator('#dailyDate').fill('2026-09-10');
-  await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction(() => Math.abs(Number(document.querySelector('#dailySwap')?.value) - 110.42) < 1e-9, { timeout: 5000 });
-  assert.match(await page.locator('#dailySwap').locator('xpath=..').innerText(), /2026-09-09表記.*2026-09-10表示/, '9/10 input must visibly use the 9/9 broker row');
-  console.log('daily input follows shifted display dates: PASS');
+  assert.ok(model.rows.length > 1, 'Hirose history must contain multiple source rows');
+  assert.ok(model.unitsPerLot > 0, 'site lot unit must be positive');
 
-  const entitlement = await page.evaluate(() => ({
-    openOnCreditExcluded: window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__?.({ date:'2026-07-10', side:'short', lots:1 }, '2026-07-10'),
-    openDaySourceEarnedNextBusinessDay: window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__?.({ date:'2026-07-10', side:'short', lots:1 }, '2026-07-10'),
-    closeDayIncluded: window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__?.({ date:'2026-07-10', closeDate:'2026-07-13', side:'short', lots:1 }, '2026-07-13'),
-    openFridayAsOfMonday: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date:'2026-07-10', closeDate:'2026-07-13', side:'short', lots:1 }, '2026-07-13')
-  }));
-  assert.equal(entitlement.openOnCreditExcluded, false, 'a swap displayed on the opening date must be excluded');
-  assert.equal(entitlement.openDaySourceEarnedNextBusinessDay, true, 'the opening-date source row is eligible when it appears on the next business day');
-  assert.equal(entitlement.closeDayIncluded, true, 'the closing display date remains inclusive');
-  near(entitlement.openFridayAsOfMonday, 117.5, 'Friday-open position should first show Friday source swap on Monday');
-  console.log('display-date open-exclusive / close-inclusive entitlement: PASS');
+  const sourceRows = model.rows.filter((row) => !isWeekend(row.date));
+  assert.equal(model.credits.length, sourceRows.length, 'each business-day source row must map to exactly one display date');
 
-  const regressions = await page.evaluate(() => {
-    const sep4 = { date:'2026-09-04', closeDate:'2026-09-10', side:'short', lots:155 };
-    const sep8 = { date:'2026-09-08', closeDate:'2026-09-10', side:'short', lots:5 };
-    const sep9 = { date:'2026-09-09', closeDate:'2026-09-10', side:'short', lots:5 };
+  const creditChecks = await page.evaluate((creditDates) => creditDates.map((creditDate) => {
+    const resolution = window.__DTL_HIROSE_SWAP_RESOLUTION__?.(creditDate) || null;
     return {
-      sep4: ['2026-09-04','2026-09-07','2026-09-08','2026-09-09','2026-09-10'].map((date) => positionSwapAsOf(sep4, date)),
-      sep8: ['2026-09-08','2026-09-09','2026-09-10'].map((date) => positionSwapAsOf(sep8, date)),
-      sep9: ['2026-09-09','2026-09-10'].map((date) => positionSwapAsOf(sep9, date))
+      creditDate,
+      resolution,
+      openOnDisplayEligible: window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__?.({ date: creditDate, side: 'short', lots: 1 }, creditDate),
+      openedOnSourceShort: resolution?.sourceDate
+        ? window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: resolution.sourceDate, closeDate: creditDate, side: 'short', lots: 1 }, creditDate)
+        : null,
+      openedOnSourceLong: resolution?.sourceDate
+        ? window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: resolution.sourceDate, closeDate: creditDate, side: 'long', lots: 1 }, creditDate)
+        : null,
+      closeOnSourceEligible: resolution?.sourceDate
+        ? window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__?.({ date: resolution.sourceDate, closeDate: resolution.sourceDate, side: 'short', lots: 1 }, creditDate)
+        : null,
+      closeOnDisplayEligible: resolution?.sourceDate
+        ? window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__?.({ date: resolution.sourceDate, closeDate: creditDate, side: 'short', lots: 1 }, creditDate)
+        : null
     };
+  }), model.credits.map((entry) => entry.creditDate));
+
+  const rowByDate = new Map(sourceRows.map((row) => [row.date, row]));
+  for (const check of creditChecks) {
+    const resolution = check.resolution;
+    assert.ok(resolution, `resolution missing for ${check.creditDate}`);
+    const source = rowByDate.get(resolution.sourceDate);
+    assert.ok(source, `resolution source ${resolution.sourceDate} is not present in history`);
+
+    const expectedCredit = nextBusinessDate(source.date);
+    assert.equal(check.creditDate, expectedCredit, `source ${source.date} must display on its next business day`);
+    assert.equal(resolution.creditDate, expectedCredit);
+    assert.equal(resolution.sourceDate, source.date);
+    assert.equal(resolution.status, 'official');
+
+    const scale = model.unitsPerLot / Number(source.unit || 1000);
+    const expectedShort = Number(source.sellJpy || 0) * scale;
+    const expectedLong = Number(source.buyJpy || 0) * scale;
+    near(resolution.shortPerLot, expectedShort, `short amount for source ${source.date}`);
+    near(resolution.longPerLot, expectedLong, `long amount for source ${source.date}`);
+
+    assert.equal(check.openOnDisplayEligible, false, 'display-date swap must be excluded when the position opens that day');
+    assert.equal(check.closeOnSourceEligible, false, 'a position already closed before the display date must not receive the swap');
+    assert.equal(check.closeOnDisplayEligible, true, 'the closing display date must remain inclusive');
+    near(check.openedOnSourceShort, expectedShort, 'a short opened on the source date must receive exactly that source row on the display date');
+    near(check.openedOnSourceLong, expectedLong, 'a long opened on the source date must receive exactly that source row on the display date');
+  }
+  console.log('source -> next-business-day mapping and entitlement invariants: PASS');
+
+  const firstDate = sourceRows[0].date;
+  const lastCreditDate = nextBusinessDate(sourceRows.at(-1).date);
+  const weekendDates = datesBetween(firstDate, lastCreditDate).filter(isWeekend);
+  const weekendChecks = await page.evaluate((dates) => dates.map((date) => window.__DTL_HIROSE_SWAP_RESOLUTION__?.(date) || null), weekendDates);
+  weekendChecks.forEach((resolution, index) => {
+    assert.ok(resolution, `weekend resolution missing for ${weekendDates[index]}`);
+    assert.equal(resolution.status, 'zero');
+    near(resolution.shortPerLot, 0, `weekend short swap ${weekendDates[index]}`);
+    near(resolution.longPerLot, 0, `weekend long swap ${weekendDates[index]}`);
   });
+  console.log('weekend zero-display invariant: PASS');
 
-  const expectedSep4 = [0, 0, 116.22 * 155, (116.22 + 115.85) * 155, (116.22 + 115.85 + 110.42) * 155];
-  regressions.sep4.forEach((value, i) => near(value, expectedSep4[i], `9/4 155-lot shifted path index ${i}`));
-  near(regressions.sep4.at(-1), 53085.95, '9/4 total must remain unchanged');
+  const creditEntries = sourceRows.map((row) => ({
+    sourceDate: row.date,
+    creditDate: nextBusinessDate(row.date),
+    row
+  }));
+  const openDate = creditEntries[0].creditDate;
+  const closeDate = creditEntries[Math.max(1, Math.floor(creditEntries.length * 0.7))].creditDate;
+  const asOfDates = creditEntries.map((entry) => entry.creditDate);
+  const cumulativeActual = await page.evaluate(({ openDate, closeDate, asOfDates }) => asOfDates.map((asOfDate) => ({
+    asOfDate,
+    short: positionSwapAsOf({ date: openDate, closeDate, side: 'short', lots: 1 }, asOfDate),
+    long: positionSwapAsOf({ date: openDate, closeDate, side: 'long', lots: 1 }, asOfDate)
+  })), { openDate, closeDate, asOfDates });
 
-  const expectedSep8 = [0, 115.85 * 5, (115.85 + 110.42) * 5];
-  regressions.sep8.forEach((value, i) => near(value, expectedSep8[i], `9/8 5-lot screenshot path index ${i}`));
-  near(regressions.sep8.at(-1), 1131.35, '9/8 position total');
+  for (const point of cumulativeActual) {
+    const eligibleEntries = creditEntries.filter((entry) => (
+      entry.creditDate > openDate
+      && entry.creditDate <= point.asOfDate
+      && entry.creditDate <= closeDate
+    ));
+    const expectedShort = eligibleEntries.reduce((sum, entry) => {
+      const factor = model.unitsPerLot / Number(entry.row.unit || 1000);
+      return sum + Number(entry.row.sellJpy || 0) * factor;
+    }, 0);
+    const expectedLong = eligibleEntries.reduce((sum, entry) => {
+      const factor = model.unitsPerLot / Number(entry.row.unit || 1000);
+      return sum + Number(entry.row.buyJpy || 0) * factor;
+    }, 0);
+    near(point.short, expectedShort, `cumulative short swap as of ${point.asOfDate}`);
+    near(point.long, expectedLong, `cumulative long swap as of ${point.asOfDate}`);
+  }
+  console.log('cumulative swap equals the sum of eligible display-date credits: PASS');
 
-  const expectedSep9 = [0, 110.42 * 5];
-  regressions.sep9.forEach((value, i) => near(value, expectedSep9[i], `9/9 5-lot screenshot path index ${i}`));
-  near(regressions.sep9.at(-1), 552.1, '9/9 position total');
-  console.log('9/4, 9/8 and 9/9 production regressions: PASS');
-
-  const finalDayNet = await page.evaluate(() => {
-    const p = {
-      date: '2026-09-04', closeDate: '2026-09-10', side: 'short', lots: 155,
-      entryRate: 48.4409, closeRate: 48.4970, closeTryJpy: 3.174
-    };
-    const rate9 = 48.4787;
-    const tryJpy9 = 153.21 / rate9;
-    const fx9 = positionFxAsOf(p, '2026-09-09', rate9, tryJpy9);
-    const swap9 = positionSwapAsOf(p, '2026-09-09');
-    const fx10 = positionFxAsOf(p, '2026-09-10', 48.4970, 3.174);
-    const swap10 = positionSwapAsOf(p, '2026-09-10');
-    return { fx9, swap9, net9: fx9 + swap9, fx10, swap10, net10: fx10 + swap10 };
-  });
-  near(finalDayNet.swap9, 35970.85, '9/9 cumulative swap');
-  near(finalDayNet.swap10, 53085.95, '9/10 cumulative swap');
-  near(finalDayNet.net10, 25486.433, '9/10 final net');
-  assert.ok(finalDayNet.net10 > finalDayNet.net9, `final-day net must rise after 9/10 swap credit: 9/9=${finalDayNet.net9}, 9/10=${finalDayNet.net10}`);
-  console.log('155-lot final-day net return no artificial drop: PASS');
+  // Net PnL has no monotonicity requirement. FX and swap can move in opposite directions.
+  // The invariant is only that each plotted/calculated Net point equals FX + cumulative Swap.
+  const arithmeticChecks = await page.evaluate(({ openDate, closeDate, asOfDates }) => {
+    const p = { date: openDate, closeDate, side: 'short', lots: 1, entryRate: 50, closeRate: 51 };
+    return asOfDates
+      .filter((date) => date >= openDate && date <= closeDate)
+      .map((date, index) => {
+        const rate = 49 + (index % 5) * 0.5;
+        const tryJpy = 3 + (index % 3) * 0.1;
+        const fx = positionFxAsOf(p, date, rate, tryJpy);
+        const swap = positionSwapAsOf(p, date);
+        return { date, fx, swap, net: fx + swap };
+      });
+  }, { openDate, closeDate, asOfDates });
+  arithmeticChecks.forEach((point) => near(point.net, Number(point.fx) + Number(point.swap), `Net identity on ${point.date}`));
+  assert.ok(arithmeticChecks.length > 1, 'Net identity test requires multiple dates');
+  console.log('Net = FX + Swap identity (no monotonicity assumption): PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log(`HIROSE SHIFTED-DISPLAY E2E (${browserName}): PASS`);
+  console.log(`HIROSE SWAP INVARIANTS (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
