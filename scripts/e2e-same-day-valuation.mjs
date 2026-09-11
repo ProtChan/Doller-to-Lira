@@ -143,7 +143,16 @@ try {
   assert.equal(await calendarCell.count(), 1, 'calendar cell for the saved display date is missing');
   assert.ok((await calendarCell.innerText()).includes(`S×${sourceDays}`), 'calendar must mark the source-day count on the display date');
 
+  // Saving resets the daily form back to today's entry. Re-select the saved display
+  // date before testing the explicit "back to synthetic" action on that row.
   await page.locator('[data-tab="daily"]').click();
+  await page.locator('#dailyDate').fill(displayDate);
+  await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(
+    ({ customConversion }) => Math.abs(Number(document.querySelector('#dailyValuationTryJpy')?.value) - customConversion) < 1e-8,
+    { customConversion },
+    { timeout: 5000 }
+  );
   await page.locator('[data-synthetic-conversion="daily"]').click();
   await page.waitForTimeout(50);
   const reverted = Number(await page.locator('#dailyValuationTryJpy').inputValue());
