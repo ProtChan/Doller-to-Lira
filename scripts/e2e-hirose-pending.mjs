@@ -32,11 +32,15 @@ try {
 
   await page.locator('#dailyDate').fill(displayDate);
   await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction((date) => {
+  await page.waitForFunction(({ date, source }) => {
     const dateInput = document.getElementById('dailyDate');
     const swap = document.getElementById('dailySwap');
-    return dateInput?.value === date && swap?.dataset.hirosePending === '1';
-  }, displayDate, { timeout: 5000 });
+    const note = swap?.closest('label')?.querySelector('.swap-source-note')?.textContent || '';
+    return dateInput?.value === date
+      && swap?.dataset.hirosePending === '1'
+      && note.includes(`${source}分 未確定`)
+      && note.includes(`${date}表示`);
+  }, { date: displayDate, source: sourceDate }, { timeout: 5000 });
 
   assert.equal(await page.locator('#dailySwap').inputValue(), '0', 'missing shifted Hirose swap must provisionally display 0');
   assert.equal(await page.locator('#dailySwap').isEditable(), false, 'pending Hirose swap remains read-only');
