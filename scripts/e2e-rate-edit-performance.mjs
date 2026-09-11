@@ -9,10 +9,20 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMo
 const pageErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 
+const near = (actual, expected, label) => assert.ok(
+  Math.abs(Number(actual) - Number(expected)) < 1e-8,
+  `${label}: expected ${expected}, got ${actual}`
+);
+const addDays = (isoDate, days) => {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
 try {
   const started = Date.now();
-  console.log('RATE/EDIT/PERF BROWSER=', browserName);
-  console.log('RATE/EDIT/PERF TEST_URL=', targetUrl);
+  console.log('RATE/EDIT/PERF INVARIANTS BROWSER=', browserName);
+  console.log('RATE/EDIT/PERF INVARIANTS TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.rateEditPerformance === '1', { timeout: 15000 });
@@ -39,6 +49,26 @@ try {
   assert.equal(markers.fastLc, '1');
   assert.equal(markers.prepared, '1');
 
+  const fixture = await page.evaluate(() => {
+    const prepared = (window.__DTL_USER_PREPARED_RATE_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTry) > 0 && Number(row.usdJpy) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const hirose = (window.__DTL_HIROSE_RATE_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const preparedDates = new Set(prepared.map((row) => row.date));
+    const fetched = hirose.find((row) => !preparedDates.has(row.date)) || null;
+    return {
+      prepared: prepared[0] || null,
+      fetched,
+      earliestDate: [...prepared.map((row) => row.date), ...hirose.map((row) => row.date)].sort()[0] || '',
+      positionRate: Number((hirose[0] || prepared[0])?.usdTryAskClose23 || prepared[0]?.usdTry || 0)
+    };
+  });
+  assert.ok(fixture.prepared, 'at least one user-prepared Hirose row is required');
+  assert.ok(fixture.fetched, 'at least one fetched-only Hirose row is required');
+  assert.ok(fixture.earliestDate && fixture.positionRate > 0, 'dynamic rate/edit fixture is incomplete');
+
   await page.locator('#openSettingsBtn').click();
   const options = await page.locator('#settingRateSource option').allTextContents();
   assert.deepEqual(options, ['自動', '手入力']);
@@ -48,86 +78,98 @@ try {
 
   await page.locator('[data-tab="daily"]').click();
 
-  // Auto mode unifies supplied and fetched Hirose 23:00 ASK rows.
-  await page.locator('#dailyDate').fill('2026-09-08');
+  // Auto mode must treat user-prepared and fetched Hirose rows as one logical source.
+  await page.locator('#dailyDate').fill(fixture.prepared.date);
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForFunction(() => document.querySelector('#dailyRate')?.dataset.rateSource === 'auto');
-  assert.equal(await page.locator('#dailyRate').inputValue(), '48.4610');
-  assert.equal(await page.locator('#dailyUsdJpy').inputValue(), '154.005');
-  const autoSep8 = await page.evaluate(() => window.__DTL_AUTO_RATE_AT__?.('2026-09-08') || null);
-  assert.deepEqual(autoSep8, { date: '2026-09-08', rate: 48.461, usdJpy: 154.005, origin: 'hirose-supplied' });
+  near(await page.locator('#dailyRate').inputValue(), fixture.prepared.usdTry, 'prepared Hirose USDTRY auto-fill');
+  near(await page.locator('#dailyUsdJpy').inputValue(), fixture.prepared.usdJpy, 'prepared Hirose USDJPY auto-fill');
+  const autoPrepared = await page.evaluate((date) => window.__DTL_AUTO_RATE_AT__?.(date) || null, fixture.prepared.date);
+  assert.equal(autoPrepared?.date, fixture.prepared.date);
+  near(autoPrepared?.rate, fixture.prepared.usdTry, 'prepared auto resolver USDTRY');
+  near(autoPrepared?.usdJpy, fixture.prepared.usdJpy, 'prepared auto resolver USDJPY');
+  assert.equal(autoPrepared?.origin, 'hirose-supplied');
   assert.match(await page.locator('#dailyRate').locator('xpath=..').innerText(), /自動.*ヒロセ/);
-  console.log('auto supplied Hirose Sep 8 rate: PASS');
+  console.log('auto supplied-Hirose source: PASS');
 
-  await page.locator('#dailyDate').fill('2026-09-07');
+  await page.locator('#dailyDate').fill(fixture.fetched.date);
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForFunction(() => document.querySelector('#dailyRate')?.dataset.rateSource === 'auto');
-  const hiroseCompare = await page.evaluate(() => ({
+  const hiroseCompare = await page.evaluate((date) => ({
     inputRate: Number(document.querySelector('#dailyRate')?.value),
     inputUsdJpy: Number(document.querySelector('#dailyUsdJpy')?.value),
-    source: window.__DTL_HIROSE_RATE_AT__?.('2026-09-07') || null
-  }));
-  assert.ok(hiroseCompare.source, 'Hirose historical rate source missing');
-  assert.equal(hiroseCompare.inputRate, Number(hiroseCompare.source.usdTryAskClose23));
-  assert.equal(hiroseCompare.inputUsdJpy, Number(Number(hiroseCompare.source.usdJpyAskClose23).toFixed(3)));
-  console.log('auto fetched Hirose Sep 7 rate: PASS');
+    source: window.__DTL_HIROSE_RATE_AT__?.(date) || null,
+    auto: window.__DTL_AUTO_RATE_AT__?.(date) || null
+  }), fixture.fetched.date);
+  assert.ok(hiroseCompare.source, 'fetched Hirose historical rate source missing');
+  near(hiroseCompare.inputRate, hiroseCompare.source.usdTryAskClose23, 'fetched Hirose USDTRY auto-fill');
+  near(hiroseCompare.inputUsdJpy, hiroseCompare.source.usdJpyAskClose23, 'fetched Hirose USDJPY auto-fill');
+  assert.equal(hiroseCompare.auto?.origin, 'hirose');
+  console.log('auto fetched-Hirose source: PASS');
 
-  // Manual mode never carries an automatic quote into a date with no saved row.
+  // Manual mode on a date before every known source must start empty and persist user input.
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingRateSource').selectOption('manual');
   await page.locator('#closeSettingsBtn').click();
-  await page.locator('#dailyDate').fill('2026-06-30');
+  const missingDate = addDays(fixture.earliestDate, -1);
+  await page.locator('#dailyDate').fill(missingDate);
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(80);
   assert.equal(await page.locator('#dailyRate').inputValue(), '');
   assert.equal(await page.locator('#dailyUsdJpy').inputValue(), '');
   assert.match(await page.locator('#dailyRate').locator('xpath=..').innerText(), /手入力/);
 
-  await page.locator('#dailyRate').fill('47.1234');
-  await page.locator('#dailyUsdJpy').fill('158.250');
-  await page.locator('#dailySwap').fill('100.25');
+  const manualRate = Number((fixture.positionRate * 1.007).toFixed(6));
+  const manualUsdJpy = Number((Number(fixture.fetched.usdJpyAskClose23) * 1.003).toFixed(6));
+  const manualSwap = 100.25;
+  await page.locator('#dailyRate').fill(String(manualRate));
+  await page.locator('#dailyUsdJpy').fill(String(manualUsdJpy));
+  await page.locator('#dailySwap').fill(String(manualSwap));
   await page.locator('#dailyForm button[type="submit"]').click();
 
-  await page.locator('#dailyDate').fill('2026-06-29');
+  const adjacentMissingDate = addDays(missingDate, -1);
+  await page.locator('#dailyDate').fill(adjacentMissingDate);
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForTimeout(40);
-  await page.locator('#dailyDate').fill('2026-06-30');
+  await page.locator('#dailyDate').fill(missingDate);
   await page.locator('#dailyDate').dispatchEvent('change');
   await page.waitForFunction(() => document.querySelector('#dailyRate')?.dataset.rateSource === 'manual');
-  assert.equal(Number(await page.locator('#dailyRate').inputValue()), 47.1234);
-  assert.equal(Number(await page.locator('#dailyUsdJpy').inputValue()), 158.25);
+  near(await page.locator('#dailyRate').inputValue(), manualRate, 'manual rate save/reload');
+  near(await page.locator('#dailyUsdJpy').inputValue(), manualUsdJpy, 'manual USDJPY save/reload');
   console.log('manual rate save/reload: PASS');
 
-  // Switch back to Auto and confirm the selector remains only two-way.
   await page.locator('#openSettingsBtn').click();
   await page.locator('#settingRateSource').selectOption('auto');
   assert.deepEqual(await page.locator('#settingRateSource option').allTextContents(), ['自動', '手入力']);
   await page.locator('#closeSettingsBtn').click();
 
-  // Add and edit an open position through the real UI.
+  // Position editing is tested as a transformation from the saved value, not a production position fixture.
+  const initialLots = 1;
+  const editedLots = initialLots * 2.5;
+  const editedRate = Number((fixture.positionRate * 0.99).toFixed(6));
   await page.locator('[data-tab="positions"]').click();
   await page.locator('#togglePositionFormBtn').click();
-  await page.locator('#positionDate').fill('2026-09-01');
+  await page.locator('#positionDate').fill(fixture.earliestDate);
   await page.locator('#positionSide').selectOption('short');
-  await page.locator('#entryRate').fill('48.0000');
-  await page.locator('#entryLots').fill('1');
+  await page.locator('#entryRate').fill(String(fixture.positionRate));
+  await page.locator('#entryLots').fill(String(initialLots));
   await page.locator('#positionMemo').fill('before edit');
   await page.locator('#positionForm button[type="submit"]').click();
   await page.waitForSelector('#detailEditBtn');
   await page.locator('#detailEditBtn').click();
   await page.waitForFunction(() => document.querySelector('#editPositionDialog')?.open === true);
-  await page.locator('#editPositionRate').fill('47.5000');
-  await page.locator('#editPositionLots').fill('2.5');
+  await page.locator('#editPositionRate').fill(String(editedRate));
+  await page.locator('#editPositionLots').fill(String(editedLots));
   await page.locator('#editPositionMemo').fill('after edit');
   await page.locator('#editPositionForm button[type="submit"]').click();
   await page.waitForFunction(() => document.querySelector('#editPositionDialog')?.open === false);
   await page.waitForSelector('#detailEditBtn');
   await page.locator('#detailEditBtn').click();
-  assert.equal(Number(await page.locator('#editPositionRate').inputValue()), 47.5);
-  assert.equal(Number(await page.locator('#editPositionLots').inputValue()), 2.5);
+  near(await page.locator('#editPositionRate').inputValue(), editedRate, 'edited position rate');
+  near(await page.locator('#editPositionLots').inputValue(), editedLots, 'edited position lots');
   assert.equal(await page.locator('#editPositionMemo').inputValue(), 'after edit');
   await page.locator('#cancelEditPositionBtn').click();
-  console.log('open position editing: PASS');
+  console.log('open position editing transformation: PASS');
 
   const perf = await page.evaluate(() => window.__DTL_PERF_STATS__?.());
   assert.ok(perf, 'performance stats unavailable');
@@ -138,7 +180,7 @@ try {
   console.log('performance stats=', perf);
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log(`RATE/EDIT/PERF E2E (${browserName}): PASS`);
+  console.log(`RATE/EDIT/PERF INVARIANTS E2E (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
