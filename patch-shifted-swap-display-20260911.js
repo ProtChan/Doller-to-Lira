@@ -10,11 +10,16 @@
   const STORE_KEY_SHIFT = 'dollar-to-lira:v1';
   const isHirose = () => root.dataset.swapInputMode === 'hirose' || localStorage.getItem(MODE_KEY) === 'hirose';
 
+  // Capture the already-installed lower layers exactly once. Reinstallation below always
+  // points back to these stable bases so async legacy observers cannot create wrapper chains.
   const fallbackPositionSwap = positionSwapAsOf;
   const fallbackPortfolioSwap = portfolioSwap;
   const fallbackRenderKpis = renderKpis;
-  let installedDerived = null;
-  let installedSave = null;
+  const fallbackDerivedDaily = derivedDaily;
+  const fallbackSaveDailyFrom = saveDailyFrom;
+  const fallbackReferenceRebuild = typeof window.__DTL_REBUILD_REFERENCE_DATA__ === 'function'
+    ? window.__DTL_REBUILD_REFERENCE_DATA__
+    : null;
 
   const parseDate = (date) => {
     const d = new Date(`${date}T12:00:00Z`);
@@ -151,67 +156,26 @@
     };
   };
 
-  const installPublic = () => {
-    window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__ = (sourceDate) => nextBusinessDate(sourceDate);
-    window.__DTL_HIROSE_CREDIT_HISTORY__ = () => creditEntries().map((entry) => ({
-      sourceDate: entry.sourceDate,
-      creditDate: entry.creditDate,
-      row: { ...entry.row }
-    }));
-    window.__DTL_HIROSE_SWAP_RESOLUTION__ = (creditDate) => ({ ...resolutionForCredit(creditDate) });
-    window.__DTL_HIROSE_SAME_DAY_SWAP_AT__ = (creditDate) => ({ ...resolutionForCredit(creditDate) });
-    window.__DTL_HIROSE_CREDIT_AT__ = (creditDate) => {
-      const current = resolutionForCredit(creditDate);
-      return current.status === 'official'
-        ? { sourceDate: current.sourceDate, creditDate: current.creditDate, row: { ...current.row } }
-        : null;
-    };
-    window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__ = (position, creditDate) => eligibleForCredit(position, creditDate);
-    window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__ = (position, sourceDate) => eligibleForSource(position, sourceDate);
-    window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__ = (position, date) => shiftedPositionSwap(position, date);
-    window.__DTL_HIROSE_DAILY_SWAP_ENTITLED__ = (date) => shiftedDailySwap(date);
-
-    positionSwapAsOf = function(position, date) {
-      if (isHirose() && historyRows().length) return shiftedPositionSwap(position, date);
-      return fallbackPositionSwap(position, date);
-    };
-    portfolioSwap = function(date) {
-      if (isHirose() && historyRows().length) return shiftedPortfolioSwap(date);
-      return fallbackPortfolioSwap(date);
-    };
-
-    root.dataset.hiroseSwapCreditRule = 'next-business-day-display-open-exclusive-close-inclusive';
-    root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
-    root.dataset.hiroseSwapEntitlementRule = 'display-date-open-exclusive-close-inclusive';
-    root.dataset.shiftedSwapAccountingActive = '1';
-  };
-
-  const installDerived = () => {
-    if (typeof derivedDaily !== 'function' || derivedDaily === installedDerived) return;
-    const base = derivedDaily;
-    const wrapper = function() {
-      const rows = base();
-      if (!Array.isArray(rows) || !isHirose() || !historyRows().length) return rows;
-      let previousTotal = 0;
-      return rows.map((row) => {
-        const swap = shiftedPortfolioSwap(row.date);
-        const dailySwap = shiftedDailySwap(row.date);
-        const fxPnl = Number(row.fxPnl || 0);
-        const total = fxPnl + swap;
-        const next = {
-          ...row,
-          ...swapFields(resolutionForCredit(row.date)),
-          swap,
-          dailySwap,
-          total,
-          dailyPnl: total - previousTotal
-        };
-        previousTotal = total;
-        return next;
-      });
-    };
-    derivedDaily = wrapper;
-    installedDerived = wrapper;
+  const shiftedDerivedWrapper = function() {
+    const rows = fallbackDerivedDaily();
+    if (!Array.isArray(rows) || !isHirose() || !historyRows().length) return rows;
+    let previousTotal = 0;
+    return rows.map((row) => {
+      const swap = shiftedPortfolioSwap(row.date);
+      const dailySwap = shiftedDailySwap(row.date);
+      const fxPnl = Number(row.fxPnl || 0);
+      const total = fxPnl + swap;
+      const next = {
+        ...row,
+        ...swapFields(resolutionForCredit(row.date)),
+        swap,
+        dailySwap,
+        total,
+        dailyPnl: total - previousTotal
+      };
+      previousTotal = total;
+      return next;
+    });
   };
 
   const settleVisibleInput = (prefix) => {
@@ -257,45 +221,88 @@
     }
   };
 
-  const installSave = () => {
-    if (typeof saveDailyFrom !== 'function' || saveDailyFrom === installedSave) return;
-    const base = saveDailyFrom;
-    const wrapper = function(prefix) {
-      const date = document.getElementById(`${prefix}Date`)?.value || '';
-      const result = base(prefix);
-      if (date && patchSavedRow(date)) {
-        state.updatedAt = new Date().toISOString();
-        localStorage.setItem(STORE_KEY_SHIFT, JSON.stringify(state));
-        try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
-        try { renderAll(); } catch (_) {}
-      }
-      setTimeout(() => settleVisibleInput(prefix), 0);
-      return result;
-    };
-    saveDailyFrom = wrapper;
-    installedSave = wrapper;
+  const shiftedSaveWrapper = function(prefix) {
+    const date = document.getElementById(`${prefix}Date`)?.value || '';
+    const result = fallbackSaveDailyFrom(prefix);
+    if (date && patchSavedRow(date)) {
+      state.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORE_KEY_SHIFT, JSON.stringify(state));
+      try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
+      try { renderAll(); } catch (_) {}
+    }
+    setTimeout(() => settleVisibleInput(prefix), 0);
+    return result;
   };
 
-  const installKpi = () => {
-    if (renderKpis?.datasetShiftedWrapper) return;
-    const wrapper = function(...args) {
-      const result = fallbackRenderKpis.apply(this, args);
-      if (isHirose() && historyRows().length) {
-        const rows = typeof derivedDaily === 'function' ? derivedDaily() : [];
-        const latest = Array.isArray(rows) ? rows.at(-1) : null;
-        const sub = document.getElementById('kpiSwapDaily');
-        if (sub && latest) sub.textContent = `直近 ${money(Number(latest.dailySwap || 0))}/日`;
-      }
+  const shiftedReferenceRebuild = fallbackReferenceRebuild ? function(...args) {
+    const finish = (result) => {
+      migrateSavedRows();
+      try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
+      try { renderAll(); } catch (_) {}
       return result;
     };
-    wrapper.datasetShiftedWrapper = true;
-    renderKpis = wrapper;
+    const result = fallbackReferenceRebuild.apply(this, args);
+    return result && typeof result.then === 'function' ? result.then(finish) : finish(result);
+  } : null;
+
+  let shiftedKpiWrapper = null;
+  const installKpi = () => {
+    if (!shiftedKpiWrapper) {
+      shiftedKpiWrapper = function(...args) {
+        const result = fallbackRenderKpis.apply(this, args);
+        if (isHirose() && historyRows().length) {
+          const rows = shiftedDerivedWrapper();
+          const latest = Array.isArray(rows) ? rows.at(-1) : null;
+          const sub = document.getElementById('kpiSwapDaily');
+          if (sub && latest) sub.textContent = `直近 ${money(Number(latest.dailySwap || 0))}/日`;
+        }
+        return result;
+      };
+    }
+    renderKpis = shiftedKpiWrapper;
+  };
+
+  const installPublic = () => {
+    window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__ = (sourceDate) => nextBusinessDate(sourceDate);
+    window.__DTL_HIROSE_CREDIT_HISTORY__ = () => creditEntries().map((entry) => ({
+      sourceDate: entry.sourceDate,
+      creditDate: entry.creditDate,
+      row: { ...entry.row }
+    }));
+    window.__DTL_HIROSE_SWAP_RESOLUTION__ = (creditDate) => ({ ...resolutionForCredit(creditDate) });
+    // Legacy name retained for compatibility; the returned row follows shifted display semantics.
+    window.__DTL_HIROSE_SAME_DAY_SWAP_AT__ = (creditDate) => ({ ...resolutionForCredit(creditDate) });
+    window.__DTL_HIROSE_CREDIT_AT__ = (creditDate) => {
+      const current = resolutionForCredit(creditDate);
+      return current.status === 'official'
+        ? { sourceDate: current.sourceDate, creditDate: current.creditDate, row: { ...current.row } }
+        : null;
+    };
+    window.__DTL_HIROSE_ELIGIBLE_FOR_CREDIT__ = (position, creditDate) => eligibleForCredit(position, creditDate);
+    window.__DTL_HIROSE_ELIGIBLE_FOR_SOURCE__ = (position, sourceDate) => eligibleForSource(position, sourceDate);
+    window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__ = (position, date) => shiftedPositionSwap(position, date);
+    window.__DTL_HIROSE_DAILY_SWAP_ENTITLED__ = (date) => shiftedDailySwap(date);
+
+    positionSwapAsOf = function(position, date) {
+      if (isHirose() && historyRows().length) return shiftedPositionSwap(position, date);
+      return fallbackPositionSwap(position, date);
+    };
+    portfolioSwap = function(date) {
+      if (isHirose() && historyRows().length) return shiftedPortfolioSwap(date);
+      return fallbackPortfolioSwap(date);
+    };
+    derivedDaily = shiftedDerivedWrapper;
+    saveDailyFrom = shiftedSaveWrapper;
+    if (shiftedReferenceRebuild) window.__DTL_REBUILD_REFERENCE_DATA__ = shiftedReferenceRebuild;
+
+    root.dataset.hiroseSwapCreditRule = 'next-business-day-display-open-exclusive-close-inclusive';
+    root.dataset.hiroseSwapCalendarRule = 'next-business-day-weekend-skip';
+    root.dataset.hiroseSwapEntitlementRule = 'display-date-open-exclusive-close-inclusive';
+    root.dataset.shiftedSwapAccountingActive = '1';
   };
 
   const install = () => {
     installPublic();
-    installDerived();
-    installSave();
     installKpi();
     migrateSavedRows();
     settleVisibleInput('daily');
@@ -330,7 +337,8 @@
       'data-hirose-margin',
       'data-hirose-pending-entries',
       'data-swap-input-mode',
-      'data-live-rate-refresh-ready'
+      'data-live-rate-refresh-ready',
+      'data-reference-data-rebuilt-at'
     ].includes(mutation.attributeName))) return;
     setTimeout(() => {
       install();
@@ -346,7 +354,8 @@
       'data-hirose-margin',
       'data-hirose-pending-entries',
       'data-swap-input-mode',
-      'data-live-rate-refresh-ready'
+      'data-live-rate-refresh-ready',
+      'data-reference-data-rebuilt-at'
     ]
   });
 
