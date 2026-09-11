@@ -1,4 +1,4 @@
-export const BUILD = '20260911-1422';
+export const BUILD = '20260911-2206';
 
 // Canonical execution order for the browser application. Production never loads
 // these files individually: scripts/build-app.mjs concatenates them into one bundle.
@@ -31,7 +31,10 @@ export const SOURCE_FILES = [
   'patch-shifted-swap-ui-guard-20260911.js',
   // Final hot-path owner. Replaces the historical save/derived wrapper chain with
   // one canonical persistence and accounting backend plus a derived-row cache.
-  'patch-backend-final-20260911.js'
+  'patch-backend-final-20260911.js',
+  // Presentation-only final layer: bucket daily FX and swap from changes in the
+  // canonical cumulative totals so both are plotted on the same visible date.
+  'patch-pnl-date-alignment-20260911.js'
 ];
 
 // Not in production: the old pending/same-day/reinforcement layers are retained in
