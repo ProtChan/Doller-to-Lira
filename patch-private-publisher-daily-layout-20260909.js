@@ -167,9 +167,17 @@
       .disclaimer{margin-top:16px;padding-top:11px;font-size:8px}
     }
 
-    /* 768px-high laptop viewports need a little more headroom than the generic
-       compact mode. Keep the overview graph useful while preventing page-level scroll. */
+    /* The valuation/swap helper fields can make the Quick Input column a few pixels
+       taller than the chart at 768px. Cap the grid itself to the remaining viewport
+       and let only the right column scroll internally if it ever needs those pixels. */
     @media(min-width:821px) and (max-height:800px){
+      .overview-layout{
+        height:calc(100dvh - 268px);
+        max-height:calc(100dvh - 268px);
+        overflow:hidden;
+      }
+      .main-chart-zone,.quick-entry{min-height:0;height:100%}
+      .quick-entry{overflow-y:auto;overscroll-behavior:contain}
       .chart-large{height:276px}
     }
   `;
