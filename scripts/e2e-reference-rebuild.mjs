@@ -24,7 +24,6 @@ try {
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hirosePendingEntries === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.askDayHighReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.referenceDataRebuild === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.shiftedSwapDisplay === '1', { timeout: 15000 });
