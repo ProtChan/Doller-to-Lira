@@ -1,6 +1,6 @@
-// Keep visible Hirose swap inputs on the intentionally shifted display calendar.
-// Broker/source date D is displayed on the next business day C. A position opened on C
-// does not receive that displayed amount; entitlement is handled by the accounting patch.
+// Keep visible Hirose swap inputs on the intentionally shifted accounting/display calendar.
+// Broker/source date D is displayed and accounted on the next business day C. A position opened on C
+// does not receive that amount; a position closed on C does. Entitlement is handled by the accounting patch.
 (() => {
   const root = document.documentElement;
   if (root.dataset.shiftedSwapUiGuard === '1') return;
@@ -71,12 +71,12 @@
   const noteText = (current, date) => {
     if (current.status === 'official') {
       const row = current.row || {};
-      return `ヒロセ ${current.sourceDate}表記 → ${current.displayDate}表示 · ${Number(row.days || 0)}日分 · ${Number(row.unit || 1000).toLocaleString()}通貨 ${Number(row.sellJpy || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円 → ${Number(state.settings.unitsPerLot || 1000).toLocaleString()}通貨 ${Number(current.shortPerLot || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
+      return `ヒロセ ${current.sourceDate}表記 → ${current.displayDate}表示・計上 · ${Number(row.days || 0)}日分 · ${Number(row.unit || 1000).toLocaleString()}通貨 ${Number(row.sellJpy || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円 → ${Number(state.settings.unitsPerLot || 1000).toLocaleString()}通貨 ${Number(current.shortPerLot || 0).toLocaleString('ja-JP', { maximumFractionDigits: 10 })}円`;
     }
-    if (current.status === 'pending') return `${current.sourceDate}分 未確定 → ${current.displayDate}表示は現在0円`;
+    if (current.status === 'pending') return `${current.sourceDate}分 未確定 → ${current.displayDate}表示・計上は現在0円`;
     return current.weekend
-      ? `${date}は週末のため表示Swap 0円`
-      : `${current.sourceDate}はヒロセ表記なし → ${current.displayDate}表示Swap 0円`;
+      ? `${date}は週末のため表示・計上Swap 0円`
+      : `${current.sourceDate}はヒロセ表記なし → ${current.displayDate}表示・計上Swap 0円`;
   };
 
   const settle = (prefix) => {
