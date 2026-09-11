@@ -104,10 +104,18 @@ try {
     localStorage.setItem('dollar-to-lira:v1', JSON.stringify(saved));
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.locator('[data-tab="daily"]').click();
   await page.locator('#dailyDate').fill('2026-09-08');
   await page.locator('#dailyDate').dispatchEvent('change');
+  await page.waitForFunction(
+    ([rate, usdJpy]) =>
+      Number(document.querySelector('#dailyRate')?.value) === rate
+      && Number(document.querySelector('#dailyUsdJpy')?.value) === usdJpy,
+    [49.9999, 150.123],
+    { timeout: 10000 }
+  );
   assert.equal(Number(await page.locator('#dailyRate').inputValue()), 49.9999, 'existing user USDTRY row was overwritten by history');
   assert.equal(Number(await page.locator('#dailyUsdJpy').inputValue()), 150.123, 'existing user USDJPY row was overwritten by history');
   console.log('existing daily rows remain authoritative: PASS');
