@@ -9,12 +9,14 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMo
 const pageErrors = [];
 page.on('pageerror', (err) => pageErrors.push(err.message));
 
-const displayDate = '2026-09-04';
-const sourceDate = '2026-09-03';
+const near = (actual, expected, label) => assert.ok(
+  Math.abs(Number(actual) - Number(expected)) < 1e-8,
+  `${label}: expected ${expected}, got ${actual}`
+);
 
 try {
-  console.log('VALUATION BROWSER=', browserName);
-  console.log('VALUATION TEST_URL=', targetUrl);
+  console.log('VALUATION RULE E2E BROWSER=', browserName);
+  console.log('VALUATION RULE E2E TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
@@ -29,32 +31,61 @@ try {
   assert.equal(await page.locator('#dailyValuationTryJpy').count(), 1, 'daily valuation conversion input is missing');
   assert.equal(await page.locator('#quickDailyValuationTryJpy').count(), 1, 'quick valuation conversion input is missing');
 
+  const fixture = await page.evaluate(() => {
+    const rows = (window.__DTL_HIROSE_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.days || 0) > 1)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const source = rows[0] || null;
+    if (!source) return null;
+    const creditDate = window.__DTL_HIROSE_NEXT_BUSINESS_CREDIT__?.(source.date) || '';
+    const resolution = window.__DTL_HIROSE_SWAP_RESOLUTION__?.(creditDate) || null;
+    return { source, creditDate, resolution };
+  });
+
+  assert.ok(fixture?.source, 'valuation E2E needs at least one multi-day broker source row');
+  assert.ok(fixture.creditDate, 'multi-day source row has no next-business-day display date');
+  assert.equal(fixture.resolution?.status, 'official');
+  assert.equal(fixture.resolution?.sourceDate, fixture.source.date);
+  assert.equal(fixture.resolution?.creditDate, fixture.creditDate);
+  assert.equal(Number(fixture.resolution?.row?.days || 0), Number(fixture.source.days));
+
+  const sourceDate = fixture.source.date;
+  const displayDate = fixture.creditDate;
+  const expectedSwap = Number(fixture.resolution.shortPerLot);
+  const sourceDays = Number(fixture.source.days);
+
   await page.locator('#dailyDate').fill(displayDate);
   await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForFunction(() => Number(document.querySelector('#dailySwap')?.value) > 400, { timeout: 5000 });
-  assert.ok(Math.abs(Number(await page.locator('#dailySwap').inputValue()) - 473.94) < 1e-9, 'Sep 3 four-day broker row must display on Sep 4');
+  await page.waitForFunction(
+    ({ expectedSwap }) => Math.abs(Number(document.querySelector('#dailySwap')?.value) - expectedSwap) < 1e-8,
+    { expectedSwap },
+    { timeout: 5000 }
+  );
+  near(await page.locator('#dailySwap').inputValue(), expectedSwap, 'daily form must use the selected source row amount');
   const swapNote = await page.locator('#dailySwap').locator('xpath=..').innerText();
-  assert.match(swapNote, /2026-09-03表記.*2026-09-04表示/, 'shifted source/display note is missing');
-  assert.match(swapNote, /4日分/, 'multi-day swap note is missing');
+  assert.ok(swapNote.includes(`${sourceDate}表記`), 'shifted source date note is missing');
+  assert.ok(swapNote.includes(`${displayDate}表示`), 'shifted display date note is missing');
+  assert.ok(swapNote.includes(`${sourceDays}日分`), 'multi-day source-day count note is missing');
 
   const synthetic = Number(await page.locator('#dailyValuationTryJpy').inputValue());
   assert.ok(synthetic > 0, 'synthetic TRY/JPY fallback was not filled');
 
-  const customConversion = 3.141592;
+  const customConversion = Number((synthetic * 0.987654321).toFixed(6));
+  assert.ok(customConversion > 0 && Math.abs(customConversion - synthetic) > 1e-6, 'test conversion must differ from synthetic fallback');
   await page.locator('#dailyValuationTryJpy').fill(String(customConversion));
   await page.locator('#dailyForm button[type="submit"]').click();
 
   const saved = await page.evaluate((date) => {
-    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    return state.daily.find((row) => row.date === date) || null;
+    const current = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
+    return current.daily.find((row) => row.date === date) || null;
   }, displayDate);
-  assert.ok(saved, 'September 4 display row was not saved');
-  assert.equal(saved.valuationTryJpy, customConversion, 'manual broker TRY/JPY conversion was not persisted');
+  assert.ok(saved, 'selected display row was not saved');
+  near(saved.valuationTryJpy, customConversion, 'manual broker TRY/JPY conversion was not persisted');
   assert.equal(saved.valuationTryJpySource, 'manual');
   assert.equal(saved.swapSourceDate, sourceDate);
   assert.equal(saved.swapCreditDate, displayDate);
-  assert.equal(saved.swapSourceDays, 4);
-  assert.equal(saved.swapPerLot, 473.94);
+  assert.equal(Number(saved.swapSourceDays), sourceDays);
+  near(saved.swapPerLot, expectedSwap, 'saved swap must match the resolved display-date amount');
 
   const derived = await page.evaluate((date) => {
     const row = derivedDaily().find((item) => item.date === date);
@@ -63,61 +94,49 @@ try {
       valuationTryJpySource: row.valuationTryJpySource,
       swapSourceDate: row.swapSourceDate,
       swapCreditDate: row.swapCreditDate,
-      swapSourceDays: row.swapSourceDays
+      swapSourceDays: row.swapSourceDays,
+      swapPerLot: row.swapPerLot
     } : null;
   }, displayDate);
-  assert.ok(derived, 'derived September 4 row is missing');
-  assert.ok(Math.abs(Number(derived.tryJpy) - customConversion) < 1e-9, `derived valuation did not use manual conversion: ${derived.tryJpy}`);
+  assert.ok(derived, 'derived display row is missing');
+  near(derived.tryJpy, customConversion, 'derived valuation must use the manual conversion');
   assert.equal(derived.valuationTryJpySource, 'manual');
   assert.equal(derived.swapSourceDate, sourceDate);
   assert.equal(derived.swapCreditDate, displayDate);
-  assert.equal(derived.swapSourceDays, 4);
+  assert.equal(Number(derived.swapSourceDays), sourceDays);
+  near(derived.swapPerLot, expectedSwap, 'derived swap metadata must preserve the resolved amount');
 
   const conversionCell = page.locator('#dailyTableBody tr').filter({ hasText: displayDate }).locator('td').nth(3);
   assert.match(await conversionCell.innerText(), /実測/, 'daily table must distinguish actual/manual TRY/JPY conversion');
   const swapCell = page.locator('#dailyTableBody tr').filter({ hasText: displayDate }).locator('td').nth(4);
-  assert.match(await swapCell.innerText(), /4日分/, 'daily table must show multi-day swap badge on the display date');
+  assert.ok((await swapCell.innerText()).includes(`${sourceDays}日分`), 'daily table must show the broker source-day count');
 
   await page.locator('[data-tab="calendar"]').click();
-  const september4 = page.locator(`.calendar-day[data-date="${displayDate}"]`);
-  assert.equal(await september4.count(), 1, 'September 4 calendar cell is missing');
-  assert.match(await september4.innerText(), /S×4/, 'calendar must mark the four-day swap on September 4 display date');
+  const calendarCell = page.locator(`.calendar-day[data-date="${displayDate}"]`);
+  assert.equal(await calendarCell.count(), 1, 'calendar cell for the saved display date is missing');
+  assert.ok((await calendarCell.innerText()).includes(`S×${sourceDays}`), 'calendar must mark the source-day count on the display date');
 
   await page.locator('[data-tab="daily"]').click();
-  const resetState = async () => page.evaluate(() => {
-    const formDate = document.querySelector('#dailyDate')?.value || '';
-    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    const row = state.daily.find((item) => item.date === formDate) || null;
-    const input = document.querySelector('#dailyValuationTryJpy');
-    return {
-      formDate,
-      rate: document.querySelector('#dailyRate')?.value || '',
-      usdJpy: document.querySelector('#dailyUsdJpy')?.value || '',
-      conversion: input?.value || '',
-      conversionSource: input?.dataset.conversionSource || '',
-      finalGuard: document.documentElement.dataset.valuationSaveFinal || '',
-      row
-    };
-  });
-  console.log('SYNTHETIC RESET BEFORE=', JSON.stringify(await resetState()));
   await page.locator('[data-synthetic-conversion="daily"]').click();
   await page.waitForTimeout(50);
-  console.log('SYNTHETIC RESET AFTER=', JSON.stringify(await resetState()));
   const reverted = Number(await page.locator('#dailyValuationTryJpy').inputValue());
-  assert.ok(reverted > 0 && Math.abs(reverted - customConversion) > 1e-6, 'synthetic reset did not replace manual conversion');
+  assert.ok(reverted > 0 && Math.abs(reverted - customConversion) > 1e-6, 'synthetic reset did not replace the manual conversion');
   await page.locator('#dailyForm button[type="submit"]').click();
+
   const revertedSaved = await page.evaluate((date) => {
-    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    return state.daily.find((row) => row.date === date) || null;
+    const current = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
+    return current.daily.find((row) => row.date === date) || null;
   }, displayDate);
-  assert.equal('valuationTryJpy' in revertedSaved, false, 'synthetic reset should remove explicit conversion override');
+  assert.ok(revertedSaved, 'row disappeared after synthetic reset');
+  assert.equal('valuationTryJpy' in revertedSaved, false, 'synthetic reset should remove the explicit conversion override');
   assert.equal(revertedSaved.valuationTryJpySource, 'synthetic');
-  assert.equal(revertedSaved.swapSourceDate, sourceDate, 'synthetic conversion reset must not disturb shifted swap source metadata');
-  assert.equal(revertedSaved.swapCreditDate, displayDate, 'synthetic conversion reset must not disturb shifted swap display metadata');
-  console.log('manual valuation conversion + synthetic fallback + shifted multi-day badge: PASS');
+  assert.equal(revertedSaved.swapSourceDate, sourceDate, 'conversion reset must not disturb swap source metadata');
+  assert.equal(revertedSaved.swapCreditDate, displayDate, 'conversion reset must not disturb swap display metadata');
+  assert.equal(Number(revertedSaved.swapSourceDays), sourceDays, 'conversion reset must not disturb source-day count');
+  console.log('manual valuation + synthetic fallback + shifted metadata invariants: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log(`VALUATION E2E (${browserName}): PASS`);
+  console.log(`VALUATION RULE E2E (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
