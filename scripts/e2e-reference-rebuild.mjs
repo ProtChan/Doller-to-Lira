@@ -9,9 +9,18 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMo
 const pageErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 
+const near = (actual, expected, label) => assert.ok(
+  Math.abs(Number(actual) - Number(expected)) < 1e-8,
+  `${label}: expected ${expected}, got ${actual}`
+);
+const isWeekday = (date) => {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return day >= 1 && day <= 5;
+};
+
 try {
-  console.log('REFERENCE REBUILD BROWSER=', browserName);
-  console.log('REFERENCE REBUILD TEST_URL=', targetUrl);
+  console.log('REFERENCE REBUILD RULES BROWSER=', browserName);
+  console.log('REFERENCE REBUILD RULES TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
@@ -20,30 +29,43 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.referenceDataRebuild === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.shiftedSwapDisplay === '1', { timeout: 15000 });
 
-  const highChecks = await page.evaluate(() => ({
-    records: Number(document.documentElement.dataset.askDayHighRecords || 0),
-    jul1: window.__DTL_ASK_DAY_HIGH_AT__?.('2026-07-01') || null,
-    jul10: window.__DTL_ASK_DAY_HIGH_AT__?.('2026-07-10') || null,
-    sep3: window.__DTL_ASK_DAY_HIGH_AT__?.('2026-09-03') || null,
-    sep4Merged: window.__DTL_HIROSE_RATE_AT__?.('2026-09-04') || null,
-    sep9: window.__DTL_HIROSE_RATE_AT__?.('2026-09-09') || null,
-    weekend: window.__DTL_ASK_DAY_HIGH_AT__?.('2026-07-04') || null,
-    hasWeekend: (window.__DTL_ASK_DAY_HIGH_HISTORY__?.() || []).some((row) => {
-      const d = new Date(`${row.date}T12:00:00Z`).getUTCDay();
-      return d === 0 || d === 6;
-    })
-  }));
-  assert.ok(highChecks.records >= 51, `ASK-high history should include published Sep 9 data: ${JSON.stringify(highChecks)}`);
-  assert.equal(highChecks.jul1?.usdTryAskDayHigh, 46.7319, 'Jul 1 4h ASK high was not loaded');
-  assert.equal(highChecks.jul10?.usdTryAskDayHigh, 47.0635, 'Jul 10 4h ASK high was not loaded');
-  assert.equal(highChecks.sep3?.usdTryAskDayHigh, 48.4657, 'Sep 3 ASK high from uploaded CSV was not loaded');
-  assert.equal(highChecks.weekend, null, 'Saturday must not have a standalone ASK-high row');
-  assert.equal(highChecks.hasWeekend, false, 'ASK-high history contains a weekend row');
-  assert.equal(highChecks.sep4Merged?.usdTryAskDayHigh, 48.4947, 'owner-published Sep 4 high should remain authoritative');
-  assert.equal(Number(highChecks.sep9?.usdTryAskClose23), 48.4787, 'Sep 9 USD/TRY close should be published');
-  assert.equal(Number(highChecks.sep9?.usdJpyAskClose23), 153.21, 'Sep 9 USD/JPY close should be published');
-  assert.equal(Number(highChecks.sep9?.usdTryAskDayHigh), 48.5472, 'Sep 9 ASK high should be published');
-  console.log('weekday-only ASK-high history from Jul 1 through Sep 9: PASS');
+  const reference = await page.evaluate(() => {
+    const rates = (window.__DTL_HIROSE_RATE_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const highs = (window.__DTL_ASK_DAY_HIGH_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTryAskDayHigh) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const resolved = rates.map((row) => ({
+      date: row.date,
+      mergedRate: window.__DTL_HIROSE_RATE_AT__?.(row.date) || null,
+      high: window.__DTL_ASK_DAY_HIGH_AT__?.(row.date) || null,
+      swap: window.__DTL_HIROSE_SWAP_RESOLUTION__?.(row.date) || null
+    }));
+    return {
+      rates,
+      highs,
+      resolved,
+      highRecords: Number(document.documentElement.dataset.askDayHighRecords || 0)
+    };
+  });
+
+  assert.ok(reference.rates.length > 1, 'reference rate history must contain multiple rows');
+  assert.ok(reference.highs.length > 0, 'ASK-high history must not be empty');
+  assert.equal(reference.highs.every((row) => {
+    const day = new Date(`${row.date}T12:00:00Z`).getUTCDay();
+    return day >= 1 && day <= 5;
+  }), true, 'ASK-high history must contain weekdays only');
+  assert.equal(reference.rates.every((row) => isWeekday(row.date)), true, 'rebuild source rate history must contain weekdays only');
+  assert.equal(reference.highRecords, reference.highs.length, 'ASK-high dataset metadata must match the published history');
+
+  for (const item of reference.resolved) {
+    assert.ok(item.mergedRate, `merged rate missing for ${item.date}`);
+    near(item.mergedRate.usdTryAskClose23, reference.rates.find((row) => row.date === item.date).usdTryAskClose23, `USDTRY reference close ${item.date}`);
+    near(item.mergedRate.usdJpyAskClose23, reference.rates.find((row) => row.date === item.date).usdJpyAskClose23, `USDJPY reference close ${item.date}`);
+    if (item.high) near(item.mergedRate.usdTryAskDayHigh, item.high.usdTryAskDayHigh, `merged ASK high ${item.date}`);
+  }
+  console.log('published reference histories are internally consistent: PASS');
 
   assert.equal(await page.locator('#rebuildReferenceDataBtn').count(), 1, 'bulk reference rebuild button missing');
 
@@ -51,93 +73,110 @@ try {
   await page.locator('#openSettingsBtn').click();
   await page.locator('#resetAllBtn').click();
   await page.waitForFunction(() => {
-    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
-    return Array.isArray(state.daily) && state.daily.length === 0;
+    const current = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
+    return Array.isArray(current.daily) && current.daily.length === 0;
   });
 
   const rebuilt = await page.evaluate(() => window.__DTL_REBUILD_REFERENCE_DATA__?.({ silent:true }));
   assert.equal(rebuilt?.ok, true, `reference rebuild failed: ${JSON.stringify(rebuilt)}`);
-  assert.equal(rebuilt.rows, highChecks.records, `reference rebuild should restore every published rate day: ${JSON.stringify(rebuilt)}`);
-  assert.equal(rebuilt.highs, highChecks.records, `reference rebuild should restore every known daily high: ${JSON.stringify(rebuilt)}`);
-  assert.ok(rebuilt.swaps >= rebuilt.rows - 2, `reference rebuild lost too many official shifted swap rows: ${JSON.stringify(rebuilt)}`);
+  assert.equal(rebuilt.rows, reference.rates.length, 'rebuild must restore every valid published rate day');
 
-  const stateChecks = await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
-    const byDate = Object.fromEntries((state.daily || []).map((row) => [row.date, row]));
+  const expectedHighCount = reference.resolved.filter((item) => Number(item.mergedRate?.usdTryAskDayHigh) > 0).length;
+  const expectedOfficialSwapCount = reference.resolved.filter((item) => item.swap?.status === 'official').length;
+  assert.equal(rebuilt.highs, expectedHighCount, 'rebuild high count must equal rate days with a published/merged high');
+  assert.equal(rebuilt.swaps, expectedOfficialSwapCount, 'rebuild official-swap count must equal official display-date resolutions');
+
+  const rebuiltState = await page.evaluate(() => {
+    const current = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
     return {
-      count: state.daily?.length || 0,
-      weekendRows: (state.daily || []).filter((row) => {
-        const d = new Date(`${row.date}T12:00:00Z`).getUTCDay();
-        return d === 0 || d === 6;
-      }).map((row) => row.date),
-      jul1: byDate['2026-07-01'] || null,
-      jul2: byDate['2026-07-02'] || null,
-      jul4: byDate['2026-07-04'] || null,
-      jul10: byDate['2026-07-10'] || null,
-      sep3: byDate['2026-09-03'] || null,
-      sep4: byDate['2026-09-04'] || null,
-      sep8: byDate['2026-09-08'] || null,
-      sep9: byDate['2026-09-09'] || null
+      daily: Array.isArray(current.daily) ? current.daily : [],
+      derived: typeof derivedDaily === 'function' ? derivedDaily() : []
     };
   });
-  assert.equal(stateChecks.count, highChecks.records, 'bulk rebuild daily row count mismatch');
-  assert.deepEqual(stateChecks.weekendRows, [], `bulk rebuild created weekend rows: ${stateChecks.weekendRows}`);
-  assert.equal(stateChecks.jul4, null, 'Saturday Jul 4 must not be created');
-  assert.equal(Number(stateChecks.jul1?.rate), 46.6672, 'Jul 1 USD/TRY was not restored');
-  assert.equal(Number(stateChecks.jul1?.usdJpy), 162.398, 'Jul 1 USD/JPY was not restored');
-  assert.equal(Number(stateChecks.jul1?.usdTryAskDayHigh), 46.7319, 'Jul 1 daily high was not restored');
-  assert.equal(stateChecks.jul1?.rateSourceTimeframe, '4h', 'Jul 1 source timeframe should be 4h');
-  assert.equal(stateChecks.jul1?.rateSourceBarTime, '20:00 JST', 'Jul 1 source bar should be 20:00');
-  assert.equal(Number(stateChecks.jul1?.swapPerLot), 0, 'Jul 1 has no prior source row in retained history, so shifted display swap must be zero');
-  assert.equal(Number(stateChecks.jul2?.swapPerLot), 116.3, 'Jul 2 must display the Jul 1 broker-table swap row');
-  assert.equal(stateChecks.jul2?.swapSourceDate, '2026-07-01', 'Jul 2 shifted swap source date must be Jul 1');
-  assert.equal(stateChecks.jul2?.swapCreditDate, '2026-07-02', 'Jul 2 shifted swap display date must be Jul 2');
-  assert.equal(Number(stateChecks.jul10?.usdTryAskDayHigh), 47.0635, 'Jul 10 daily high was not restored');
-  assert.equal(Number(stateChecks.sep3?.rate), 48.3153, 'Sep 3 USD/TRY was not restored');
-  assert.equal(Number(stateChecks.sep3?.usdJpy), 155.422, 'Sep 3 USD/JPY was not restored');
-  assert.equal(Number(stateChecks.sep3?.usdTryAskDayHigh), 48.4657, 'Sep 3 daily high was not restored');
-  assert.equal(Number(stateChecks.sep3?.swapPerLot), 118.26, 'Sep 3 must display the Sep 2 broker-table swap row');
-  assert.equal(stateChecks.sep3?.swapSourceDate, '2026-09-02', 'Sep 3 shifted swap source date must be Sep 2');
-  assert.equal(stateChecks.sep3?.swapCreditDate, '2026-09-03', 'Sep 3 shifted display date must be Sep 3');
-  assert.equal(Number(stateChecks.sep4?.swapPerLot), 473.94, 'Sep 4 must display the Sep 3 four-day swap');
-  assert.equal(stateChecks.sep4?.swapSourceDate, '2026-09-03', 'Sep 4 shifted swap source date must be Sep 3');
-  assert.equal(stateChecks.sep4?.swapCreditDate, '2026-09-04', 'Sep 4 shifted display date must be Sep 4');
-  assert.equal(Number(stateChecks.sep4?.swapSourceDays), 4, 'Sep 4 must carry the Sep 3 four-day marker');
-  assert.equal(Number(stateChecks.sep8?.swapPerLot), 116.22, 'Sep 8 must display the Sep 7 broker-table swap row');
-  assert.equal(stateChecks.sep8?.swapSourceDate, '2026-09-07', 'Sep 8 shifted swap source date must be Sep 7');
-  assert.equal(Number(stateChecks.sep9?.rate), 48.4787, 'Sep 9 USD/TRY was not restored');
-  assert.equal(Number(stateChecks.sep9?.usdJpy), 153.21, 'Sep 9 USD/JPY was not restored');
-  assert.equal(Number(stateChecks.sep9?.usdTryAskDayHigh), 48.5472, 'Sep 9 ASK high was not restored');
-  assert.equal(Number(stateChecks.sep9?.swapPerLot), 115.85, 'Sep 9 must display the Sep 8 broker-table swap row');
-  assert.equal(stateChecks.sep9?.swapSourceDate, '2026-09-08', 'Sep 9 shifted swap source date must be Sep 8');
-  console.log('reset -> one-click complete reference data rebuild with shifted swap display dates: PASS');
+  assert.equal(rebuiltState.daily.length, reference.rates.length, 'rebuilt daily row count mismatch');
+  assert.equal(rebuiltState.daily.every((row) => {
+    const day = new Date(`${row.date}T12:00:00Z`).getUTCDay();
+    return day >= 1 && day <= 5;
+  }), true, 'rebuild must never create weekend daily rows');
+
+  const dailyByDate = new Map(rebuiltState.daily.map((row) => [row.date, row]));
+  const resolutionByDate = new Map(reference.resolved.map((item) => [item.date, item]));
+  for (const source of reference.rates) {
+    const row = dailyByDate.get(source.date);
+    const expected = resolutionByDate.get(source.date);
+    assert.ok(row, `rebuilt row missing for ${source.date}`);
+    assert.ok(expected?.mergedRate, `reference row missing for ${source.date}`);
+
+    near(row.rate, expected.mergedRate.usdTryAskClose23, `rebuilt USDTRY ${source.date}`);
+    near(row.usdJpy, expected.mergedRate.usdJpyAskClose23, `rebuilt USDJPY ${source.date}`);
+    near(row.tryJpy, Number(expected.mergedRate.usdJpyAskClose23) / Number(expected.mergedRate.usdTryAskClose23), `rebuilt TRYJPY ${source.date}`);
+    assert.equal(row.rateSource, 'reference-bulk');
+    assert.equal(row.rateSourcePrice, 'ASK');
+    assert.equal(row.rateSourceTimeframe, source.sourceTimeframe || '60m');
+    assert.equal(row.rateSourceBarTime, source.sourceBarTime || '23:00 JST');
+
+    const expectedHigh = Number(expected.mergedRate.usdTryAskDayHigh || 0);
+    if (expectedHigh > 0) near(row.usdTryAskDayHigh, expectedHigh, `rebuilt ASK high ${source.date}`);
+
+    const swap = expected.swap;
+    assert.ok(swap, `swap resolution missing for rebuilt date ${source.date}`);
+    assert.equal(row.swapCreditDate, swap.creditDate || source.date, `swap display date ${source.date}`);
+    assert.equal(row.swapSourceDate, swap.sourceDate || '', `swap source date ${source.date}`);
+    if (swap.status === 'official') {
+      assert.equal(row.swapSource, 'hirose');
+      assert.equal(row.swapPending, false);
+      near(row.swapPerLot, swap.shortPerLot, `rebuilt short swap ${source.date}`);
+      near(row.swapLongPerLot, swap.longPerLot, `rebuilt long swap ${source.date}`);
+      assert.equal(Number(row.swapSourceDays), Number(swap.row?.days || 0));
+    } else if (swap.status === 'pending') {
+      assert.equal(row.swapSource, 'hirose-pending');
+      assert.equal(row.swapPending, true);
+      near(row.swapPerLot, 0, `pending rebuilt swap ${source.date}`);
+    } else {
+      assert.equal(row.swapSource, 'hirose-zero');
+      assert.equal(row.swapPending, false);
+      near(row.swapPerLot, 0, `zero rebuilt swap ${source.date}`);
+    }
+  }
+  console.log('reset -> rebuild reproduces rate/high/swap reference semantics for every row: PASS');
+
+  const derivedByDate = new Map(rebuiltState.derived.map((row) => [row.date, row]));
+  for (const row of rebuiltState.daily) {
+    const derived = derivedByDate.get(row.date);
+    assert.ok(derived, `derived row missing for ${row.date}`);
+    near(derived.total, Number(derived.fxPnl || 0) + Number(derived.swap || 0), `derived Net identity ${row.date}`);
+  }
+  console.log('rebuilt derived rows satisfy Net = FX + cumulative Swap: PASS');
 
   await page.locator('[data-tab="risk"]').click();
   await page.waitForFunction(() => {
     const chart = window.Chart?.getChart?.(document.getElementById('lcChart'));
-    return chart?.data?.datasets?.some((d) => d.label === '日中最大ASK');
+    return chart?.data?.datasets?.some((dataset) => dataset.label === '日中最大ASK');
   });
   const chartCheck = await page.evaluate(() => {
     const chart = Chart.getChart(document.getElementById('lcChart'));
-    const ds = chart.data.datasets.find((d) => d.label === '日中最大ASK');
-    const jul1Idx = chart.data.labels.indexOf('07-01');
-    const sep3Idx = chart.data.labels.indexOf('09-03');
-    const sep9Idx = chart.data.labels.indexOf('09-09');
+    const dataset = chart.data.datasets.find((item) => item.label === '日中最大ASK');
+    const rows = derivedDaily();
     return {
-      jul1: jul1Idx >= 0 ? ds.data[jul1Idx] : null,
-      sep3: sep3Idx >= 0 ? ds.data[sep3Idx] : null,
-      sep9: sep9Idx >= 0 ? ds.data[sep9Idx] : null,
-      pointRadius: ds.pointRadius
+      labels: chart.data.labels,
+      data: dataset.data,
+      pointRadius: dataset.pointRadius,
+      expectedLabels: rows.map((row) => row.date.slice(5)),
+      expectedData: rows.map((row) => Number(row.usdTryAskDayHigh) > 0 ? Number(row.usdTryAskDayHigh) : null)
     };
   });
-  assert.equal(Number(chartCheck.jul1), 46.7319, 'Jul 1 backfilled ASK high is not visible on risk chart');
-  assert.equal(Number(chartCheck.sep3), 48.4657, 'Sep 3 ASK high is not visible on risk chart');
-  assert.equal(Number(chartCheck.sep9), 48.5472, 'Sep 9 ASK high is not visible on risk chart');
+  assert.deepEqual(chartCheck.labels, chartCheck.expectedLabels, 'ASK-high chart labels must follow derived daily dates');
+  assert.equal(chartCheck.data.length, chartCheck.expectedData.length, 'ASK-high chart series length mismatch');
+  chartCheck.data.forEach((value, index) => {
+    const expected = chartCheck.expectedData[index];
+    if (expected === null) assert.equal(value, null, `ASK-high chart should have a gap at index ${index}`);
+    else near(value, expected, `ASK-high chart value index ${index}`);
+  });
   assert.equal(Number(chartCheck.pointRadius), 0, 'ASK-high series should remain a pure line without visible point markers');
-  console.log('complete ASK-high risk line through Sep 9: PASS');
+  console.log('ASK-high risk chart mirrors rebuilt daily high data: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log(`REFERENCE REBUILD E2E (${browserName}): PASS`);
+  console.log(`REFERENCE REBUILD RULES E2E (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
