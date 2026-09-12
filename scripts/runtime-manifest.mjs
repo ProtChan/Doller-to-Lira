@@ -1,4 +1,4 @@
-export const BUILD = '20260912-1640';
+export const BUILD = '20260912-1655';
 
 // Canonical execution order for the browser application. Production never loads
 // these files individually: scripts/build-app.mjs concatenates them into one bundle.
@@ -24,7 +24,8 @@ export const SOURCE_FILES = [
   'patch-reference-data-rebuild-20260909.js',
   'patch-private-publisher-daily-layout-20260909.js',
   'patch-live-rate-refresh-20260910.js',
-  // Valuation UI is deliberately separated from accounting semantics.
+  // Valuation UI remains loaded for saved-state compatibility; service mode below
+  // removes the public daily input controls.
   'patch-valuation-ui-20260911.js',
   // One authoritative swap calendar: source date -> next business-day display.
   'patch-shifted-swap-display-20260911.js',
@@ -32,9 +33,11 @@ export const SOURCE_FILES = [
   // Final hot-path owner. Replaces the historical save/derived wrapper chain with
   // one canonical persistence and accounting backend plus a derived-row cache.
   'patch-backend-final-20260911.js',
-  // Presentation-only final layer: preserve the original cumulative line charts.
-  // The calendar renderer/design is intentionally left untouched.
-  'patch-pnl-date-alignment-20260911.js'
+  // Presentation-only cumulative line charts.
+  'patch-pnl-date-alignment-20260911.js',
+  // Public product policy: published rates + Hirose swaps are authoritative and
+  // Daily Data is view-only. Legacy form elements stay hidden for data compatibility.
+  'patch-readonly-daily-service-20260912.js'
 ];
 
 // Not in production: the old pending/same-day/reinforcement layers are retained in
