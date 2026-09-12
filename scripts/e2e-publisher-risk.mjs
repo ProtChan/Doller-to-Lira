@@ -82,22 +82,24 @@ try {
   const positionDate = fixture.rates[0].date;
   const entryRate = Number(fixture.rates[0].usdTryAskClose23);
 
+  // Install the synthetic position into both the live app state and persistence.
+  // A full page reload is unrelated to the risk invariant and, on deployed WebKit,
+  // can race the PWA/data refetch immediately after a Pages deployment.
   await page.evaluate(({ positionDate, entryRate, lots }) => {
     const key = 'dollar-to-lira:v1';
-    const saved = JSON.parse(localStorage.getItem(key) || '{}');
-    saved.positions = [{
+    const position = {
       id:'worst-ask-risk-invariant', date:positionDate, side:'short', entryRate, lots,
       memo:'risk invariant test', closeDate:null, closeRate:null
-    }];
-    saved.updatedAt = new Date().toISOString();
-    localStorage.setItem(key, JSON.stringify(saved));
+    };
+    state.positions = [position];
+    state.updatedAt = new Date().toISOString();
+    localStorage.setItem(key, JSON.stringify(state));
+    window.__DTL_BACKEND_INVALIDATE__?.();
+    try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
+    renderAll();
   }, { positionDate, entryRate, lots });
 
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
+  await page.waitForFunction(() => Array.isArray(state?.positions) && state.positions.some((p) => p?.id === 'worst-ask-risk-invariant'));
 
   await page.locator('[data-tab="daily"]').click();
   assert.equal(await page.locator('#openRatePublisherBtn').count(), 0, 'publisher link leaked into public Daily Data UI');
