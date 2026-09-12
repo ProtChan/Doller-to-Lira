@@ -33,9 +33,8 @@ self.addEventListener('activate', (event) => {
     );
     await self.clients.claim();
 
-    // A user may still have a tab / installed PWA running code from an older
-    // service worker. On an actual upgrade (not first install), navigate those
-    // windows once so the newest index + versioned bundle take effect immediately.
+    // Existing tabs / installed PWAs may still be executing an older bundle.
+    // On a real upgrade, navigate them once after the new worker is active.
     if (hadPreviousAppCache) {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       await Promise.all(windows.map(async (client) => {
@@ -81,11 +80,10 @@ self.addEventListener('fetch', (event) => {
 
   const isNavigation = request.mode === 'navigate';
   const isData = url.pathname.includes('/data/');
-  const isBuildMeta = url.pathname.endsWith('/build-meta.json');
   const isRuntime = /\/runtime-[^/]+\.js$/.test(url.pathname);
-  const isImmutableAsset = !isNavigation && !isData && !isBuildMeta && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
+  const isImmutableAsset = !isNavigation && !isData && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
 
-  if (isRuntime || isBuildMeta) {
+  if (isRuntime) {
     event.respondWith((async () => {
       try {
         return await put(request, await fetch(request, { cache: 'no-store' }));
