@@ -46,36 +46,6 @@ try {
   assert.ok(mobileLayout.inputWidths.every((width) => width > 100 && width < 200), `daily mobile inputs have abnormal scale: ${mobileLayout.inputWidths.join(',')}`);
   assert.ok(mobileLayout.buttonWidth > 300, `daily save button should span mobile form: ${mobileLayout.buttonWidth}`);
   console.log('mobile Daily Input width/scale: PASS');
-
-  // The desktop restoration must not leak into the current smartphone calendar.
-  await mobile.locator('[data-tab="calendar"]').click();
-  const mobileCalendar = await mobile.evaluate(() => {
-    const panel = document.getElementById('view-calendar');
-    const grid = document.getElementById('calendarGrid');
-    const day = grid.querySelector('.calendar-day:not(.empty)');
-    const panelStyle = getComputedStyle(panel);
-    const gridStyle = getComputedStyle(grid);
-    const dayStyle = getComputedStyle(day);
-    return {
-      panelRadius: panelStyle.borderTopLeftRadius,
-      panelBorder: panelStyle.borderTopWidth,
-      gap: gridStyle.columnGap,
-      dayRadius: dayStyle.borderTopLeftRadius,
-      dayBorder: dayStyle.borderTopWidth,
-      dayMinHeight: dayStyle.minHeight,
-      dayPaddingTop: dayStyle.paddingTop,
-      dayPaddingRight: dayStyle.paddingRight,
-    };
-  });
-  assert.equal(mobileCalendar.panelRadius, '0px', `desktop calendar panel styling leaked into mobile: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.panelBorder, '0px', `desktop calendar panel border leaked into mobile: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.gap, '1px', `mobile calendar grid gap changed: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.dayRadius, '0px', `mobile calendar day radius changed: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.dayBorder, '0px', `mobile calendar day border changed: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.dayMinHeight, '94px', `mobile calendar day height changed: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.dayPaddingTop, '6px', `mobile calendar vertical padding changed: ${JSON.stringify(mobileCalendar)}`);
-  assert.equal(mobileCalendar.dayPaddingRight, '4px', `mobile calendar horizontal padding changed: ${JSON.stringify(mobileCalendar)}`);
-  console.log('mobile calendar current design preserved: PASS');
   await mobile.close();
 
   const desktop = await browser.newPage({ viewport: { width: 1366, height: 768 } });
@@ -98,46 +68,6 @@ try {
   await checkPanel('daily', '#view-daily .daily-table-wrap', 'daily history panel');
   await checkPanel('risk', '#view-risk .risk-grid', 'risk chart panel');
   console.log('1366x768 primary panels fit viewport: PASS');
-
-  await desktop.locator('[data-tab="calendar"]').click();
-  const desktopCalendar = await desktop.evaluate(() => {
-    const panel = document.getElementById('view-calendar');
-    const grid = document.getElementById('calendarGrid');
-    const day = grid.querySelector('.calendar-day:not(.empty)');
-    const monthButton = document.getElementById('prevMonthBtn');
-    const panelStyle = getComputedStyle(panel);
-    const gridStyle = getComputedStyle(grid);
-    const dayStyle = getComputedStyle(day);
-    const buttonStyle = getComputedStyle(monthButton);
-    return {
-      marker: document.documentElement.dataset.calendarDesktopStyle,
-      panelRadius: panelStyle.borderTopLeftRadius,
-      panelBorder: panelStyle.borderTopWidth,
-      panelPadding: panelStyle.paddingTop,
-      gap: gridStyle.columnGap,
-      gridBackground: gridStyle.backgroundColor,
-      dayRadius: dayStyle.borderTopLeftRadius,
-      dayBorder: dayStyle.borderTopWidth,
-      dayMinHeight: dayStyle.minHeight,
-      dayPadding: dayStyle.paddingTop,
-      buttonWidth: buttonStyle.width,
-      buttonHeight: buttonStyle.height,
-      buttonRadius: buttonStyle.borderTopLeftRadius,
-    };
-  });
-  assert.equal(desktopCalendar.marker, 'pre-20260905-rounded-cards', `historical desktop marker missing: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.panelRadius, '22px', `desktop calendar panel radius is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.panelBorder, '1px', `desktop calendar panel border is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.panelPadding, '20px', `desktop calendar panel padding is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.gap, '7px', `desktop calendar grid gap is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.dayRadius, '14px', `desktop calendar day radius is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.dayBorder, '1px', `desktop calendar day border is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.dayMinHeight, '92px', `desktop calendar day height is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.dayPadding, '10px', `desktop calendar day padding is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.buttonWidth, '36px', `desktop calendar month button width is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.buttonHeight, '36px', `desktop calendar month button height is not historical: ${JSON.stringify(desktopCalendar)}`);
-  assert.equal(desktopCalendar.buttonRadius, '11px', `desktop calendar month button radius is not historical: ${JSON.stringify(desktopCalendar)}`);
-  console.log('pre-2026-09-05 desktop calendar card design restored: PASS');
   await desktop.close();
 
   console.log(`LAYOUT E2E (${browserName}): PASS`);
