@@ -1,4 +1,5 @@
 const CACHE_NAME = 'dollar-to-lira-pwa-0056';
+const CACHE_PREFIX = 'dollar-to-lira-pwa-';
 const APP_SHELL = [
   './',
   './index.html',
@@ -19,11 +20,49 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const hadPreviousAppCache = keys.some(
+      (key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME
+    );
+
+    await Promise.all(
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key))
+    );
+    await self.clients.claim();
+
+    // A user may still have a tab / installed PWA running code from an older
+    // service worker. On an actual upgrade (not first install), navigate those
+    // windows once so the newest index + versioned bundle take effect immediately.
+    if (hadPreviousAppCache) {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      await Promise.all(windows.map(async (client) => {
+        try {
+          if (typeof client.navigate === 'function') {
+            await client.navigate(client.url);
+          } else {
+            client.postMessage({ type: 'DTL_UPDATE_READY', build: CACHE_NAME.slice(CACHE_PREFIX.length) });
+          }
+        } catch (_) {
+          try {
+            client.postMessage({ type: 'DTL_UPDATE_READY', build: CACHE_NAME.slice(CACHE_PREFIX.length) });
+          } catch (_) {}
+        }
+      }));
+    }
+  })());
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'DTL_SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'DTL_GET_BUILD') {
+    event.source?.postMessage?.({
+      type: 'DTL_BUILD',
+      build: CACHE_NAME.slice(CACHE_PREFIX.length)
+    });
+  }
 });
 
 const put = async (request, response) => {
@@ -42,10 +81,11 @@ self.addEventListener('fetch', (event) => {
 
   const isNavigation = request.mode === 'navigate';
   const isData = url.pathname.includes('/data/');
+  const isBuildMeta = url.pathname.endsWith('/build-meta.json');
   const isRuntime = /\/runtime-[^/]+\.js$/.test(url.pathname);
-  const isImmutableAsset = !isNavigation && !isData && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
+  const isImmutableAsset = !isNavigation && !isData && !isBuildMeta && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
 
-  if (isRuntime) {
+  if (isRuntime || isBuildMeta) {
     event.respondWith((async () => {
       try {
         return await put(request, await fetch(request, { cache: 'no-store' }));
@@ -63,7 +103,7 @@ self.addEventListener('fetch', (event) => {
       const cached = await caches.match(request);
       if (cached) return cached;
       try {
-        return await put(request, await fetch(request));
+        return await put(request, await fetch(request, { cache: 'no-store' }));
       } catch (_) {
         throw new Error('offline');
       }
@@ -73,7 +113,7 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     try {
-      return await put(request, await fetch(request));
+      return await put(request, await fetch(request, { cache: 'no-store' }));
     } catch (_) {
       const cached = await caches.match(request);
       if (cached) return cached;
