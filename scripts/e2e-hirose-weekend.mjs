@@ -44,13 +44,18 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.shiftedSwapDisplay === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCalendarRule === 'next-business-day-weekend-skip', { timeout: 15000 });
 
-  await page.locator('#openSettingsBtn').click();
-  await page.locator('#settingSwapMode').selectOption('hirose');
-  const unitsPerLot = Number(await page.locator('#settingUnits').inputValue());
+  const serviceSettings = await page.evaluate(() => ({
+    unitsPerLot: Number(state.settings.unitsPerLot || 0),
+    swapMode: localStorage.getItem('dollar-to-lira:swap-mode:v1'),
+    authority: document.documentElement.dataset.dailySwapAuthority
+  }));
+  const unitsPerLot = serviceSettings.unitsPerLot;
   assert.ok(unitsPerLot > 0, 'site lot unit must be positive');
-  await page.locator('#closeSettingsBtn').click();
+  assert.equal(serviceSettings.swapMode, 'hirose');
+  assert.equal(serviceSettings.authority, 'hirose-feed');
 
   const model = await page.evaluate(() => {
     const rows = (window.__DTL_HIROSE_HISTORY__?.() || [])
@@ -61,7 +66,6 @@ try {
   });
 
   assert.ok(model.rows.length > 1, 'Hirose history must contain multiple source rows');
-
   const sourceRows = model.rows.filter((row) => !isWeekend(row.date));
   assert.equal(model.credits.length, sourceRows.length, 'each business-day source row must map to exactly one display date');
 
@@ -125,11 +129,7 @@ try {
   });
   console.log('weekend zero-display invariant: PASS');
 
-  const creditEntries = sourceRows.map((row) => ({
-    sourceDate: row.date,
-    creditDate: nextBusinessDate(row.date),
-    row
-  }));
+  const creditEntries = sourceRows.map((row) => ({ sourceDate: row.date, creditDate: nextBusinessDate(row.date), row }));
   const openDate = creditEntries[0].creditDate;
   const closeDate = creditEntries[Math.max(1, Math.floor(creditEntries.length * 0.7))].creditDate;
   const asOfDates = creditEntries.map((entry) => entry.creditDate);
@@ -141,25 +141,15 @@ try {
 
   for (const point of cumulativeActual) {
     const eligibleEntries = creditEntries.filter((entry) => (
-      entry.creditDate > openDate
-      && entry.creditDate <= point.asOfDate
-      && entry.creditDate <= closeDate
+      entry.creditDate > openDate && entry.creditDate <= point.asOfDate && entry.creditDate <= closeDate
     ));
-    const expectedShort = eligibleEntries.reduce((sum, entry) => {
-      const factor = unitsPerLot / Number(entry.row.unit || 1000);
-      return sum + Number(entry.row.sellJpy || 0) * factor;
-    }, 0);
-    const expectedLong = eligibleEntries.reduce((sum, entry) => {
-      const factor = unitsPerLot / Number(entry.row.unit || 1000);
-      return sum + Number(entry.row.buyJpy || 0) * factor;
-    }, 0);
+    const expectedShort = eligibleEntries.reduce((sum, entry) => sum + Number(entry.row.sellJpy || 0) * (unitsPerLot / Number(entry.row.unit || 1000)), 0);
+    const expectedLong = eligibleEntries.reduce((sum, entry) => sum + Number(entry.row.buyJpy || 0) * (unitsPerLot / Number(entry.row.unit || 1000)), 0);
     near(point.short, expectedShort, `cumulative short swap as of ${point.asOfDate}`);
     near(point.long, expectedLong, `cumulative long swap as of ${point.asOfDate}`);
   }
   console.log('cumulative swap equals the sum of eligible display-date credits: PASS');
 
-  // Net PnL has no monotonicity requirement. FX and swap can move in opposite directions.
-  // The invariant is only that each calculated Net point equals FX + cumulative Swap.
   const arithmeticChecks = await page.evaluate(({ openDate, closeDate, asOfDates }) => {
     const p = { date: openDate, closeDate, side: 'short', lots: 1, entryRate: 50, closeRate: 51 };
     return asOfDates
