@@ -46,10 +46,11 @@ assert.match(bundle, /backendCoreVersion = '20260911-1422'/, 'canonical backend 
 assert.match(bundle, /dataset\.pnlDateAlignment = '1'/, 'PnL date-alignment marker missing');
 assert.match(bundle, /sw\.js\?v=\$\{encodeURIComponent\(build\)\}/, 'service worker registration is not tied to the running build');
 assert.match(bundle, /updateViaCache: 'none'/, 'service worker registration must bypass HTTP cache for update checks');
+assert.match(bundle, /registration\?\.update\?\./, 'client has no service-worker-native freshness check');
 assert.match(bundle, /controllerchange/, 'client does not react when a newer service worker takes control');
-assert.match(bundle, /build-meta\.json\?t=/, 'client does not independently check current build metadata');
 assert.match(bundle, /visibilitychange/, 'long-lived PWA does not check updates when it becomes visible');
 assert.match(bundle, /setInterval\(/, 'long-lived PWA has no periodic update check');
+assert.doesNotMatch(bundle, /build-meta\.json\?t=/, 'client must not use metadata fetches for PWA freshness');
 assert.doesNotMatch(bundle, /\beval\s*\(/, 'bundle contains eval()');
 assert.doesNotMatch(bundle, /fetch\s*\([^\n;]*\.js(?:[?`'\"]|\b)/, 'bundle dynamically fetches JavaScript');
 assert.doesNotMatch(bundle, /runtime-[0-9-]+\.js/, 'bundle references a legacy runtime loader');
@@ -72,7 +73,6 @@ assert.match(sw, /hadPreviousAppCache/, 'service worker does not detect upgrades
 assert.match(sw, /client\.navigate\(client\.url\)/, 'service worker does not reload legacy open clients on upgrade');
 assert.match(sw, /self\.clients\.claim\(\)/, 'new service worker does not claim existing clients');
 assert.match(sw, /self\.skipWaiting\(\)/, 'new service worker does not activate immediately');
-assert.match(sw, /build-meta\.json/, 'build metadata is not forced through the network-first update path');
 assert.doesNotMatch(sw, /runtime-[0-9-]+\.js/, 'service worker still references legacy runtime');
 
 console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources -> 1 production bundle; ${RETIRED_RUNTIME_FILES.length} wrappers retired; legacy PWA auto-upgrade guarded)`);
