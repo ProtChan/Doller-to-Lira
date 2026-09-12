@@ -13,45 +13,39 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
   await mobile.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await mobile.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
-  await mobile.waitForFunction(() => document.documentElement.dataset.mobileDailyNormalized === '1', { timeout: 15000 });
+  await mobile.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
   await mobile.locator('[data-tab="daily"]').click();
   const mobileLayout = await mobile.evaluate(() => {
-    const form = document.getElementById('dailyForm');
     const view = document.getElementById('view-daily');
-    const tableWrap = document.querySelector('#view-daily .daily-table-wrap');
-    const inputs = [...form.querySelectorAll('input')].map((el) => el.getBoundingClientRect());
-    const button = form.querySelector('button[type="submit"]').getBoundingClientRect();
-    const formRect = form.getBoundingClientRect();
+    const wrap = document.querySelector('#view-daily .daily-table-wrap');
     const viewRect = view.getBoundingClientRect();
-    const wrapRect = tableWrap.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
     return {
       innerWidth: window.innerWidth,
       htmlScrollWidth: document.documentElement.scrollWidth,
       bodyScrollWidth: document.body.scrollWidth,
-      formLeft: formRect.left,
-      formRight: formRect.right,
       viewLeft: viewRect.left,
       viewRight: viewRect.right,
       wrapLeft: wrapRect.left,
       wrapRight: wrapRect.right,
-      inputWidths: inputs.map((r) => r.width),
-      buttonWidth: button.width,
-      gridColumns: getComputedStyle(form).gridTemplateColumns,
+      formVisible: !!(document.getElementById('dailyForm')?.offsetParent),
+      deleteButtons: document.querySelectorAll('#dailyTableBody [data-delete-daily]').length
     };
   });
   assert.ok(mobileLayout.htmlScrollWidth <= mobileLayout.innerWidth + 1, `mobile html overflows: ${JSON.stringify(mobileLayout)}`);
   assert.ok(mobileLayout.bodyScrollWidth <= mobileLayout.innerWidth + 1, `mobile body overflows: ${JSON.stringify(mobileLayout)}`);
-  assert.ok(mobileLayout.formLeft >= -0.5 && mobileLayout.formRight <= mobileLayout.innerWidth + 0.5, `daily form leaves viewport: ${JSON.stringify(mobileLayout)}`);
-  assert.ok(mobileLayout.wrapRight <= mobileLayout.innerWidth + 0.5, `daily table wrapper leaves viewport: ${JSON.stringify(mobileLayout)}`);
-  assert.ok(mobileLayout.inputWidths.every((width) => width > 100 && width < 200), `daily mobile inputs have abnormal scale: ${mobileLayout.inputWidths.join(',')}`);
-  assert.ok(mobileLayout.buttonWidth > 300, `daily save button should span mobile form: ${mobileLayout.buttonWidth}`);
-  console.log('mobile Daily Input width/scale: PASS');
+  assert.ok(mobileLayout.viewLeft >= -0.5 && mobileLayout.viewRight <= mobileLayout.innerWidth + 0.5, `Daily Data view leaves viewport: ${JSON.stringify(mobileLayout)}`);
+  assert.ok(mobileLayout.wrapRight <= mobileLayout.innerWidth + 0.5, `Daily Data table wrapper leaves viewport: ${JSON.stringify(mobileLayout)}`);
+  assert.equal(mobileLayout.formVisible, false, 'daily editor must stay hidden on mobile');
+  assert.equal(mobileLayout.deleteButtons, 0, 'read-only daily rows must have no delete controls');
+  console.log('mobile Daily Data read-only layout: PASS');
   await mobile.close();
 
   const desktop = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   await desktop.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await desktop.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await desktop.waitForFunction(() => document.documentElement.dataset.desktopViewportCompact === '1', { timeout: 15000 });
+  await desktop.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
 
   const checkPanel = async (tab, selector, label) => {
     await desktop.locator(`[data-tab="${tab}"]`).click();
@@ -65,9 +59,13 @@ try {
 
   await checkPanel('overview', '#view-overview .overview-layout', 'overview main panel');
   await checkPanel('positions', '#view-positions .positions-layout', 'positions panel');
-  await checkPanel('daily', '#view-daily .daily-table-wrap', 'daily history panel');
+  await checkPanel('daily', '#view-daily .daily-table-wrap', 'Daily Data history panel');
   await checkPanel('risk', '#view-risk .risk-grid', 'risk chart panel');
-  console.log('1366x768 primary panels fit viewport: PASS');
+
+  await desktop.locator('[data-tab="daily"]').click();
+  assert.equal(await desktop.locator('#dailyForm').isVisible(), false, 'desktop daily editor must stay hidden');
+  assert.equal(await desktop.locator('#dailyTableBody [data-delete-daily]').count(), 0, 'desktop Daily Data must be read-only');
+  console.log('1366x768 primary panels + read-only Daily Data fit viewport: PASS');
   await desktop.close();
 
   console.log(`LAYOUT E2E (${browserName}): PASS`);
