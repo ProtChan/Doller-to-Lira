@@ -38,11 +38,32 @@ const transformModule = (file, source) => {
   return next;
 };
 
+const versionFirstPartyAssets = (source, quote = '"') => {
+  const patterns = [
+    /styles\.css\?v=[^"']+/g,
+    /pwa-mobile-20260906\.css\?v=[^"']+/g,
+    /manifest\.webmanifest\?v=[^"']+/g,
+    /icon-dollar-lira\.svg\?v=[^"']+/g
+  ];
+  const replacements = [
+    `styles.css?v=${BUILD}`,
+    `pwa-mobile-20260906.css?v=${BUILD}`,
+    `manifest.webmanifest?v=${BUILD}`,
+    `icon-dollar-lira.svg?v=${BUILD}`
+  ];
+  let next = source;
+  patterns.forEach((pattern, index) => {
+    next = next.replace(pattern, replacements[index]);
+  });
+  return next;
+};
+
 const transformIndex = (source) => {
   const pattern = /<script src="\.\/runtime-[^"]+\.js\?v=[^"]+" defer><\/script>/;
   const replacement = `<script src="./app.bundle.js?v=${BUILD}" defer></script>`;
-  const next = source.replace(pattern, replacement);
+  let next = source.replace(pattern, replacement);
   if (next === source) throw new Error('index runtime script tag was not found');
+  next = versionFirstPartyAssets(next);
   return next;
 };
 
@@ -62,6 +83,8 @@ const transformServiceWorker = (source) => {
     "const isRuntime = /\\/app\\.bundle\\.js$/.test(url.pathname);"
   );
   if (next === runtimeBefore) throw new Error('service worker runtime matcher target missing');
+
+  next = versionFirstPartyAssets(next, "'");
   return next;
 };
 
