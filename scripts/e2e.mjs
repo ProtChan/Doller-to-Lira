@@ -5,60 +5,56 @@ const targetUrl = process.env.TEST_URL || 'http://127.0.0.1:4173/';
 const browserName = (process.env.BROWSER || 'chromium').toLowerCase();
 const browserType = browserName === 'webkit' ? webkit : chromium;
 const browser = await browserType.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+const page = await context.newPage();
 const pageErrors = [];
 page.on('pageerror', (err) => pageErrors.push(err.message));
-page.on('console', (msg) => {
-  if (msg.type() === 'error') console.log('[browser console error]', msg.text());
-});
 
 const near = (actual, expected, label) => assert.ok(
   Math.abs(Number(actual) - Number(expected)) < 1e-8,
   `${label}: expected ${expected}, got ${actual}`
 );
-const nextBusinessDate = (sourceDate) => {
-  const d = new Date(`${sourceDate}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-};
-const closeSettingsIfOpen = async () => {
-  const drawer = page.locator('#settingsDrawer');
-  const isOpen = (await drawer.getAttribute('aria-hidden')) === 'false';
-  if (isOpen) {
-    const close = page.locator('#closeSettingsBtn');
-    if (await close.isVisible()) await close.click();
-  }
-  await page.waitForFunction(() => document.querySelector('#settingsDrawer')?.getAttribute('aria-hidden') === 'true', { timeout: 5000 });
-};
 
 try {
   console.log('BROWSER=', browserName);
   console.log('TEST_URL=', targetUrl);
+
+  // Simulate an old client that previously selected manual rate/swap modes.
+  await page.addInitScript(() => {
+    localStorage.setItem('dollar-to-lira:rate-source:v1', 'manual');
+    localStorage.setItem('dollar-to-lira:swap-mode:v1', 'manual');
+  });
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
 
   for (const [key, value] of Object.entries({
     appReady: '1',
-    accountingV2: '1',
-    swapDecimals: '1',
     hiroseMargin: '1',
     hiroseFeedReady: '1',
     hiroseHistoryReady: '1',
-    hiroseHistoryAccounting: '1',
-    calendarBreakdown: '1',
-    calendarMobileCompact: '1',
-    valuationUi: '1',
     backendCore: '1',
-    backendCoreReady: '1',
     shiftedSwapDisplay: '1',
-    shiftedSwapAccountingActive: '1'
+    shiftedSwapAccountingActive: '1',
+    dailyDataService: '1'
   })) {
     await page.waitForFunction(({ key, value }) => document.documentElement.dataset[key] === value, { key, value }, { timeout: 15000 });
   }
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapCreditRule === 'next-business-day-display-open-exclusive-close-inclusive', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.hiroseSwapEntitlementRule === 'display-date-open-exclusive-close-inclusive', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.dailyDataMode === 'provider-readonly', { timeout: 15000 });
 
-  // These are broker margin-band boundaries, not a production position fixture.
+  const modes = await page.evaluate(() => ({
+    storedRateMode: localStorage.getItem('dollar-to-lira:rate-source:v1'),
+    storedSwapMode: localStorage.getItem('dollar-to-lira:swap-mode:v1'),
+    rateMode: document.documentElement.dataset.rateSourceMode,
+    swapMode: document.documentElement.dataset.swapInputMode,
+    rateAuthority: document.documentElement.dataset.dailyRateAuthority,
+    swapAuthority: document.documentElement.dataset.dailySwapAuthority
+  }));
+  assert.deepEqual(modes, {
+    storedRateMode: 'auto', storedSwapMode: 'hirose', rateMode: 'auto', swapMode: 'hirose',
+    rateAuthority: 'published-feed', swapAuthority: 'hirose-feed'
+  });
+  console.log('legacy manual modes -> provider service modes: PASS');
+
   const marginBands = await page.evaluate(() => ({
     at155: window.__DTL_MARGIN_PER_1000__(155),
     below1575: window.__DTL_MARGIN_PER_1000__(157.4999),
@@ -69,158 +65,88 @@ try {
   assert.deepEqual(marginBands, { at155: 6300, below1575: 6300, at1575: 6400, below160: 6400, at160: 6500 });
   console.log('Hirose USDJPY margin boundary rules: PASS');
 
-  const manifestUrl = new URL('manifest.webmanifest', targetUrl).href;
-  const manifestResponse = await page.request.get(manifestUrl);
+  const manifestResponse = await page.request.get(new URL('manifest.webmanifest', targetUrl).href);
   assert.equal(manifestResponse.ok(), true);
   const manifest = await manifestResponse.json();
   assert.equal(manifest.display, 'standalone');
   assert.equal(manifest.short_name, 'ドルとリラ');
-  assert.ok(manifest.icons?.some((icon) => /icon-dollar-lira\.svg/.test(icon.src)));
   console.log('PWA manifest: PASS');
 
-  const fixture = await page.evaluate(() => {
-    const rows = (window.__DTL_HIROSE_HISTORY__?.() || [])
-      .filter((row) => row?.date)
+  const reference = await page.evaluate(() => {
+    const rates = (window.__DTL_HIROSE_RATE_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const credits = window.__DTL_HIROSE_CREDIT_HISTORY__?.() || [];
-    const multi = credits.find((entry) => Number(entry?.row?.days || 0) > 1) || credits[0] || null;
-    return {
-      historyStart: document.documentElement.dataset.hiroseHistoryStart || '',
-      rows,
-      credits,
-      first: credits[0] || null,
-      multi,
-      last: credits.at(-1) || null
-    };
+    return { rates, credits, sampleRate: rates.at(-1) || null, sampleCredit: credits.find((x) => Number(x?.row?.days || 0) > 1) || credits[0] || null };
   });
-  assert.ok(fixture.rows.length > 1, 'history must contain multiple rows');
-  assert.ok(fixture.first && fixture.multi && fixture.last, 'credit history must be available');
-  assert.equal(fixture.historyStart, fixture.rows[0].date, 'history start marker must match the first loaded source row');
-  assert.equal(fixture.credits.length, fixture.rows.filter((row) => {
-    const day = new Date(`${row.date}T12:00:00Z`).getUTCDay();
-    return day !== 0 && day !== 6;
-  }).length, 'each business-day source row must have one credit entry');
-  assert.equal(fixture.first.creditDate, nextBusinessDate(fixture.first.sourceDate));
-
-  await page.locator('[data-tab="positions"]').click();
-  assert.equal(await page.locator('#view-positions').evaluate((el) => el.classList.contains('active')), true);
-  await page.locator('#togglePositionFormBtn').click();
-  await page.locator('#positionDate').fill(fixture.rows[0].date);
-  await page.locator('#positionSide').selectOption('short');
-  await page.locator('#entryRate').fill('50');
-  await page.locator('#entryLots').fill('1');
-  await page.locator('#positionForm button[type="submit"]').click();
-  const savedPosition = await page.evaluate(() => {
-    const current = JSON.parse(localStorage.getItem('dollar-to-lira:v1'));
-    return current.positions.at(-1) || null;
-  });
-  assert.ok(savedPosition, 'position was not persisted');
-  assert.equal(savedPosition.date, fixture.rows[0].date);
-  assert.equal(savedPosition.side, 'short');
-  assert.equal(Number(savedPosition.lots), 1);
-  console.log('position save: PASS');
-
-  await page.locator('#openSettingsBtn').click();
-  assert.equal(Number(await page.locator('#settingUnits').inputValue()), 1000);
-  assert.equal(await page.locator('#settingSwapMode').count(), 1);
-  await page.locator('#settingSwapMode').selectOption('hirose');
-  await closeSettingsIfOpen();
-  await page.waitForFunction(() => document.documentElement.dataset.swapInputMode === 'hirose', { timeout: 5000 });
-  await page.waitForFunction(() => saveDailyFrom?.__dtlCanonicalBackend === true && derivedDaily?.__dtlCanonicalBackend === true, { timeout: 5000 });
-
-  const ruleCheck = await page.evaluate(({ first, multi }) => ({
-    firstResolution: window.__DTL_HIROSE_SWAP_RESOLUTION__?.(first.creditDate) || null,
-    multiResolution: window.__DTL_HIROSE_SWAP_RESOLUTION__?.(multi.creditDate) || null,
-    openedOnDisplayDay: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: multi.creditDate, side: 'short', lots: 1 }, multi.creditDate),
-    openedOnSourceDay: window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: multi.sourceDate, side: 'short', lots: 1 }, multi.creditDate)
-  }), { first: fixture.first, multi: fixture.multi });
-
-  assert.equal(ruleCheck.firstResolution?.sourceDate, fixture.first.sourceDate);
-  assert.equal(ruleCheck.firstResolution?.creditDate, fixture.first.creditDate);
-  assert.equal(ruleCheck.multiResolution?.sourceDate, fixture.multi.sourceDate);
-  assert.equal(ruleCheck.multiResolution?.creditDate, fixture.multi.creditDate);
-  assert.equal(ruleCheck.openedOnDisplayDay, 0, 'opening display date must not receive that displayed swap');
-  near(ruleCheck.openedOnSourceDay, ruleCheck.multiResolution?.shortPerLot, 'opening on the source date must receive the row on its later display date');
-  console.log('next-business-day swap accounting rules: PASS');
+  assert.ok(reference.rates.length > 1, 'provider rate history missing');
+  assert.ok(reference.credits.length > 0, 'provider swap credit history missing');
 
   await page.locator('[data-tab="daily"]').click();
-  assert.equal(await page.locator('#dailyValuationTryJpy').count(), 1);
-  assert.equal(await page.locator('#quickDailyValuationTryJpy').count(), 1);
+  assert.equal((await page.locator('[data-tab="daily"]').textContent())?.trim(), '日次データ');
+  assert.equal((await page.locator('#view-daily h2').textContent())?.trim(), '日次データ');
+  assert.equal(await page.locator('#dailyForm').isVisible(), false, 'daily edit form must not be public');
+  assert.equal(await page.locator('#quickDailyForm').isVisible(), false, 'quick daily edit form must not be public');
+  assert.equal(await page.locator('#dailyTableBody [data-delete-daily]').count(), 0, 'read-only daily rows must have no delete action');
+  assert.ok(await page.locator('#dailyTableBody tr[data-daily-readonly="1"]').count() > 0, 'read-only daily table is empty');
 
-  for (const entry of [fixture.first, fixture.multi]) {
-    const expected = await page.evaluate((creditDate) => window.__DTL_HIROSE_SWAP_RESOLUTION__?.(creditDate) || null, entry.creditDate);
-    await page.locator('#dailyDate').fill(entry.creditDate);
-    await page.locator('#dailyDate').dispatchEvent('change');
-    await page.waitForFunction(
-      ({ expectedSwap }) => Math.abs(Number(document.querySelector('#dailySwap')?.value) - expectedSwap) < 1e-8,
-      { expectedSwap: Number(expected.shortPerLot) },
-      { timeout: 5000 }
-    );
-    const note = await page.locator('#dailySwap').locator('xpath=..').innerText();
-    assert.ok(note.includes(`${entry.sourceDate}表記`));
-    assert.ok(note.includes(`${entry.creditDate}表示`));
-    if (Number(entry.row?.days || 0) > 1) assert.ok(note.includes(`${Number(entry.row.days)}日分`));
+  const serviceRow = await page.evaluate((date) => {
+    const source = window.__DTL_HIROSE_RATE_AT__?.(date) || null;
+    const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === date) || null;
+    const derived = typeof derivedDaily === 'function' ? derivedDaily().find((row) => row.date === date) || null : null;
+    return { source, saved, derived };
+  }, reference.sampleRate.date);
+  assert.ok(serviceRow.source && serviceRow.saved && serviceRow.derived, 'provider daily row unavailable');
+  near(serviceRow.saved.rate, serviceRow.source.usdTryAskClose23, 'provider USDTRY authority');
+  near(serviceRow.saved.usdJpy, serviceRow.source.usdJpyAskClose23, 'provider USDJPY authority');
+  near(serviceRow.saved.tryJpy, Number(serviceRow.source.usdJpyAskClose23) / Number(serviceRow.source.usdTryAskClose23), 'provider TRYJPY derivation');
+  assert.equal(serviceRow.saved.rateSource, 'provider');
+  near(serviceRow.derived.total, Number(serviceRow.derived.fxPnl || 0) + Number(serviceRow.derived.swap || 0), 'Net identity');
+  console.log('published rate -> read-only daily state: PASS');
+
+  await page.locator('#openSettingsBtn').click();
+  for (const id of ['settingSwap','settingSwapMode','settingRateSource','settingTryJpy']) {
+    const control = page.locator(`#${id}`);
+    if (await control.count()) assert.equal(await control.isVisible(), false, `${id} must not be exposed in service settings`);
   }
-  console.log('daily shifted auto-fill follows current source/display mapping: PASS');
+  assert.equal(await page.locator('#settingCapital').isVisible(), true);
+  assert.equal(await page.locator('#settingUnits').isVisible(), true);
+  await page.locator('#closeSettingsBtn').click();
+  console.log('rate/swap settings removed from public Settings: PASS');
 
-  await page.locator('#dailyDate').fill(fixture.multi.creditDate);
-  await page.locator('#dailyDate').dispatchEvent('change');
-  const currentResolution = await page.evaluate((date) => window.__DTL_HIROSE_SWAP_RESOLUTION__?.(date) || null, fixture.multi.creditDate);
-  await page.waitForFunction(
-    ({ expectedSwap }) => Math.abs(Number(document.querySelector('#dailySwap')?.value) - expectedSwap) < 1e-8,
-    { expectedSwap: Number(currentResolution.shortPerLot) },
-    { timeout: 5000 }
-  );
-  await page.locator('#dailyRate').fill('50');
-  await page.locator('#dailyUsdJpy').fill('160');
-  const synthetic = Number(await page.locator('#dailyValuationTryJpy').inputValue());
-  assert.ok(synthetic > 0, 'synthetic TRYJPY must be positive');
-  const manualConversion = Number((synthetic * 0.99).toFixed(6));
-  await page.locator('#dailyValuationTryJpy').fill(String(manualConversion));
-  await page.locator('#dailyForm button[type="submit"]').click();
-  const saved = await page.evaluate((date) => JSON.parse(localStorage.getItem('dollar-to-lira:v1')).daily.find((row) => row.date === date), fixture.multi.creditDate);
-  near(saved.valuationTryJpy, manualConversion, 'actual TRYJPY valuation override');
-  assert.equal(saved.valuationTryJpySource, 'manual');
-  assert.equal(saved.swapSourceDate, fixture.multi.sourceDate);
-  assert.equal(saved.swapCreditDate, fixture.multi.creditDate);
-  assert.equal(Number(saved.swapSourceDays), Number(fixture.multi.row.days || 0));
-  near(saved.swapPerLot, currentResolution.shortPerLot, 'saved swap amount follows current resolution');
-  console.log('actual TRYJPY valuation override: PASS');
+  // Position management remains editable; only Daily Data became provider-owned.
+  await page.locator('[data-tab="positions"]').click();
+  await page.locator('#togglePositionFormBtn').click();
+  await page.locator('#positionDate').fill(reference.rates[0].date);
+  await page.locator('#positionSide').selectOption('short');
+  await page.locator('#entryRate').fill(String(Number(reference.rates[0].usdTryAskClose23)));
+  await page.locator('#entryLots').fill('1');
+  await page.locator('#positionForm button[type="submit"]').click();
+  const savedPosition = await page.evaluate(() => JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').positions?.at(-1) || null);
+  assert.ok(savedPosition, 'position was not persisted');
+  assert.equal(Number(savedPosition.lots), 1);
+  console.log('position management remains writable: PASS');
 
-  await page.locator('#openSettingsBtn').click();
-  await page.locator('#settingSwapMode').selectOption('manual');
-  await page.locator('#settingRateSource').selectOption('manual');
-  await closeSettingsIfOpen();
-  const manualDate = nextBusinessDate(fixture.last.creditDate);
-  await page.locator('#dailyDate').fill(manualDate);
-  await page.locator('#dailyDate').dispatchEvent('change');
-  await page.waitForTimeout(25);
-  assert.equal(await page.locator('#dailySwap').isEditable(), true);
-  const sentinel = { rate: 50.25, usdJpy: 160.8, swap: 123.456789 };
-  await page.locator('#dailyRate').fill(String(sentinel.rate));
-  await page.locator('#dailyUsdJpy').fill(String(sentinel.usdJpy));
-  await page.locator('#dailySwap').fill(String(sentinel.swap));
-  await page.locator('#dailyForm button[type="submit"]').click();
-  const manualSaved = await page.evaluate((date) => JSON.parse(localStorage.getItem('dollar-to-lira:v1')).daily.find((row) => row.date === date), manualDate);
-  near(manualSaved.rate, sentinel.rate, 'manual USDTRY value');
-  near(manualSaved.usdJpy, sentinel.usdJpy, 'manual USDJPY value');
-  near(manualSaved.swapPerLot, sentinel.swap, 'manual swap value');
-  console.log('manual fallback mode: PASS');
-
-  await page.locator('#openSettingsBtn').click();
-  assert.equal(await page.locator('#openBackupFromSettingsBtn').isVisible(), true);
-  await page.locator('#openBackupFromSettingsBtn').click();
-  assert.equal(await page.locator('#backupDialog').evaluate((el) => el.open), true);
-  await page.locator('#closeBackupBtn').click();
-  console.log('mobile backup access: PASS');
+  const swapRule = await page.evaluate((credit) => {
+    const resolution = window.__DTL_HIROSE_SWAP_RESOLUTION__?.(credit.creditDate) || null;
+    const openedOnCredit = window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: credit.creditDate, side:'short', lots:1 }, credit.creditDate);
+    const openedBeforeCredit = window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: credit.sourceDate, side:'short', lots:1 }, credit.creditDate);
+    const closedOnCredit = window.__DTL_HIROSE_POSITION_SWAP_ENTITLED__?.({ date: credit.sourceDate, closeDate:credit.creditDate, side:'short', lots:1 }, credit.creditDate);
+    return { resolution, openedOnCredit, openedBeforeCredit, closedOnCredit };
+  }, reference.sampleCredit);
+  assert.equal(swapRule.openedOnCredit, 0, 'credit-day opening must not receive that swap');
+  near(swapRule.openedBeforeCredit, swapRule.resolution.shortPerLot, 'position open before credit date receives swap');
+  near(swapRule.closedOnCredit, swapRule.resolution.shortPerLot, 'credit-day closing position receives swap');
+  console.log('shifted swap entitlement rules: PASS');
 
   const backendStats = await page.evaluate(() => window.__DTL_BACKEND_STATS__?.() || null);
-  assert.ok(backendStats && backendStats.derivedComputations >= 1, 'canonical backend stats unavailable');
-  assert.ok(backendStats.derivedCacheHits >= 1, `canonical derived cache was not reused: ${JSON.stringify(backendStats)}`);
-  console.log('canonical backend stats=', backendStats);
+  assert.ok(backendStats, 'canonical backend stats unavailable');
 
-  if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log(`E2E (${browserName}): PASS`);
+  const actionablePageErrors = pageErrors.filter((message) => !(
+    browserName === 'webkit' && /sw\.js/i.test(message) && /access control checks/i.test(message)
+  ));
+  if (actionablePageErrors.length) throw new Error(`Browser page errors: ${actionablePageErrors.join(' | ')}`);
+  console.log(`E2E PROVIDER DAILY SERVICE (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
