@@ -1,6 +1,6 @@
 // Provider-driven Daily Data mode.
-// The owner publishes USD/TRY + USD/JPY reference rates and Hirose swap data.
-// Public users can inspect the resulting daily snapshots, but cannot edit or delete them.
+// Published USD/TRY + USD/JPY rates and Hirose swap data are authoritative.
+// Public users can inspect Daily Data, but cannot edit or delete it.
 (() => {
   const root = document.documentElement;
   if (root.dataset.dailyDataService === '1') return;
@@ -9,8 +9,6 @@
   const RATE_MODE_KEY = 'dollar-to-lira:rate-source:v1';
   const SWAP_MODE_KEY = 'dollar-to-lira:swap-mode:v1';
 
-  // Service mode has one public source of truth. Keep the old keys for backward
-  // compatibility, but force them to their provider-backed modes.
   localStorage.setItem(RATE_MODE_KEY, 'auto');
   localStorage.setItem(SWAP_MODE_KEY, 'hirose');
   root.dataset.rateSourceMode = 'auto';
@@ -42,8 +40,8 @@
 
   const same = (a, b) => Math.abs(Number(a || 0) - Number(b || 0)) < 1e-10;
 
-  // For dates covered by the published feed, provider values replace historical
-  // manual rate/conversion overrides. Rows outside the feed stay as read-only legacy history.
+  // Provider-covered dates replace historical manual daily-rate/conversion overrides.
+  // Rows for which no published rate exists remain as read-only legacy history.
   const syncPublishedRates = () => {
     if (!Array.isArray(state?.daily)) return 0;
     const byDate = new Map(state.daily.map((row) => [row?.date, row]).filter(([date]) => date));
@@ -70,6 +68,7 @@
         } : {})
       };
       delete next.valuationTryJpy;
+
       const differs = !same(existing.rate, next.rate)
         || !same(existing.usdJpy, next.usdJpy)
         || !same(existing.tryJpy, next.tryJpy)
@@ -79,6 +78,7 @@
         || existing.rateSourceTimeframe !== next.rateSourceTimeframe
         || existing.rateSourceBarTime !== next.rateSourceBarTime
         || (Number(next.usdTryAskDayHigh) > 0 && !same(existing.usdTryAskDayHigh, next.usdTryAskDayHigh));
+
       if (differs) {
         byDate.set(date, next);
         changed += 1;
@@ -104,32 +104,35 @@
 
   const sourceLabel = (row) => {
     const source = String(row?.rateSource || '');
-    if (source === 'provider' || source === 'reference-bulk' || source === 'hirose-ask-23close') return '配信';
-    return '旧履歴';
+    return ['provider', 'reference-bulk', 'hirose-ask-23close'].includes(source) ? '配信' : '旧履歴';
   };
 
-  // Final renderer for the Daily tab: no form actions and no row deletion.
   renderDailyTable = function() {
     const body = document.getElementById('dailyTableBody');
     if (!body) return;
     const rows = [...(derivedDaily() || [])].reverse();
-    const table = body.closest('table');
-    const head = table?.querySelector('thead');
+    const head = body.closest('table')?.querySelector('thead');
     if (head) head.innerHTML = '<tr><th>日付</th><th>USD/TRY</th><th>USD/JPY</th><th>TRY/JPY</th><th>Swap/lot</th><th>保有lot</th><th>FX損益</th><th>累積Swap</th><th>総損益</th><th>日次損益</th><th>Source</th></tr>';
     body.innerHTML = rows.length ? rows.map((row) => {
       const usdJpy = usdJpyFor(row);
       const days = Number(row.swapSourceDays || 0);
       const swapText = `${money(Number(row.swapPerLot || 0))}${days > 1 ? `<small class="swap-days-badge">${days}日分</small>` : ''}`;
-      return `<tr data-daily-readonly="1"><td>${row.date}</td><td>${rateFmt(row.rate)}</td><td>${usdJpy > 0 ? num(usdJpy, 3) : '—'}</td><td>${rateFmt(row.tryJpy)}</td><td>${swapText}</td><td>${num(row.lots,2)}</td><td class="${row.fxPnl>=0?'positive-text':'negative-text'}">${money(row.fxPnl)}</td><td class="${row.swap>=0?'positive-text':'negative-text'}">${money(row.swap)}</td><td class="${row.total>=0?'positive-text':'negative-text'}">${money(row.total)}</td><td class="${row.dailyPnl>=0?'positive-text':'negative-text'}">${money(row.dailyPnl)}</td><td><span class="daily-source-badge ${sourceLabel(row)==='配信'?'provider':'legacy'}">${sourceLabel(row)}</span></td></tr>`;
+      const source = sourceLabel(row);
+      return `<tr data-daily-readonly="1"><td>${row.date}</td><td>${rateFmt(row.rate)}</td><td>${usdJpy > 0 ? num(usdJpy, 3) : '—'}</td><td>${rateFmt(row.tryJpy)}</td><td>${swapText}</td><td>${num(row.lots,2)}</td><td class="${row.fxPnl>=0?'positive-text':'negative-text'}">${money(row.fxPnl)}</td><td class="${row.swap>=0?'positive-text':'negative-text'}">${money(row.swap)}</td><td class="${row.total>=0?'positive-text':'negative-text'}">${money(row.total)}</td><td class="${row.dailyPnl>=0?'positive-text':'negative-text'}">${money(row.dailyPnl)}</td><td><span class="daily-source-badge ${source==='配信'?'provider':'legacy'}">${source}</span></td></tr>`;
     }).join('') : '<tr><td colspan="11" style="text-align:center;color:#596373;padding:36px">配信済みの日次データがありません</td></tr>';
   };
 
-  const hideControlLabel = (id) => {
+  const forceHide = (element) => {
+    if (!element) return;
+    element.hidden = true;
+    element.setAttribute('aria-hidden', 'true');
+    element.style.setProperty('display', 'none', 'important');
+  };
+
+  const hideControlRow = (id) => {
     const input = document.getElementById(id);
-    const label = input?.closest('label');
-    if (!label) return;
-    label.hidden = true;
-    label.setAttribute('aria-hidden', 'true');
+    if (!input) return;
+    forceHide(input.closest('label') || input);
   };
 
   const ensureLatestCard = () => {
@@ -141,14 +144,12 @@
     if (!card) {
       card = document.createElement('div');
       card.className = 'readonly-daily-latest';
-      const hiddenForm = document.getElementById('quickDailyForm');
-      hiddenForm?.after(card);
+      document.getElementById('quickDailyForm')?.after(card);
     }
     const row = (derivedDaily() || []).at(-1) || null;
     const html = !row ? '<p>配信データを待っています。</p>' : (() => {
       const usdJpy = usdJpyFor(row);
-      return `
-        <div class="readonly-daily-date"><span>${row.date}</span><small>閲覧専用</small></div>
+      return `<div class="readonly-daily-date"><span>${row.date}</span><small>閲覧専用</small></div>
         <div class="readonly-daily-grid">
           <div><span>USD/TRY</span><strong>${rateFmt(row.rate)}</strong></div>
           <div><span>USD/JPY</span><strong>${usdJpy > 0 ? num(usdJpy,3) : '—'}</strong></div>
@@ -170,29 +171,20 @@
     if (title) title.textContent = '日次データ';
     if (meta) meta.textContent = '配信データ · 閲覧専用';
 
-    ['dailyForm', 'quickDailyForm'].forEach((id) => {
-      const form = document.getElementById(id);
-      if (!form) return;
-      form.hidden = true;
-      form.setAttribute('aria-hidden', 'true');
-    });
+    forceHide(document.getElementById('dailyForm'));
+    forceHide(document.getElementById('quickDailyForm'));
+    ['settingTryJpy', 'settingSwap', 'settingSwapMode', 'settingRateSource'].forEach(hideControlRow);
+    forceHide(document.getElementById('referenceRebuildNote'));
+    forceHide(document.getElementById('rebuildReferenceDataBtn'));
 
-    // Keep legacy inputs in DOM so old saved-state/runtime compatibility stays safe,
-    // but remove every public rate/swap source control from the Settings drawer.
-    ['settingTryJpy', 'settingSwap', 'settingSwapMode', 'settingRateSource'].forEach(hideControlLabel);
-    document.getElementById('referenceRebuildNote')?.setAttribute('hidden', '');
-    document.getElementById('rebuildReferenceDataBtn')?.setAttribute('hidden', '');
     const reset = document.getElementById('resetAllBtn');
     if (reset) reset.textContent = 'ユーザーデータを初期化';
-
     ensureLatestCard();
   };
 
   const style = document.createElement('style');
   style.dataset.dailyDataService = '1';
   style.textContent = `
-    #dailyForm[hidden],#quickDailyForm[hidden],
-    #rebuildReferenceDataBtn[hidden],#referenceRebuildNote[hidden]{display:none!important}
     .readonly-daily-latest{display:grid;gap:12px;margin-top:14px}
     .readonly-daily-latest p{margin:0;color:var(--muted2);font-size:10px;line-height:1.6}
     .readonly-daily-date{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:10px}
@@ -206,10 +198,7 @@
     .daily-source-badge.provider{color:var(--accent)}
     .daily-source-badge.legacy{color:var(--muted2)}
     #view-daily .daily-table-wrap{margin-top:0}
-    @media(max-width:820px){
-      .readonly-daily-grid{grid-template-columns:1fr 1fr}
-      .readonly-daily-latest{margin-top:10px}
-    }
+    @media(max-width:820px){.readonly-daily-latest{margin-top:10px}}
   `;
   document.head.appendChild(style);
 
