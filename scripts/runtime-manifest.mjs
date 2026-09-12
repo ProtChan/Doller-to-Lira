@@ -1,4 +1,4 @@
-export const BUILD = '20260912-1540';
+export const BUILD = '20260912-1610';
 
 // Canonical execution order for the browser application. Production never loads
 // these files individually: scripts/build-app.mjs concatenates them into one bundle.
@@ -11,6 +11,9 @@ export const SOURCE_FILES = [
   // patch. It is now an explicit backend dependency and is bundled synchronously.
   'patch-hirose-swap-margin-20260906.js',
   'patch-calendar-breakdown-20260906.js',
+  // Presentation-only restoration of the pre-redesign PC calendar. The rules are
+  // scoped to desktop widths so the current compact smartphone calendar is kept.
+  'patch-calendar-desktop-legacy-20260912.js',
   'patch-mobile-pwa-20260906.js',
   'patch-access-layout-20260906.js',
   'patch-swap-precision-20260906.js',
