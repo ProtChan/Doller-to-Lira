@@ -43,7 +43,7 @@
   const same = (a, b) => Math.abs(Number(a || 0) - Number(b || 0)) < 1e-10;
 
   // For dates covered by the published feed, provider values replace historical
-  // manual rate overrides. Rows outside the feed are retained as read-only legacy history.
+  // manual rate/conversion overrides. Rows outside the feed stay as read-only legacy history.
   const syncPublishedRates = () => {
     if (!Array.isArray(state?.daily)) return 0;
     const byDate = new Map(state.daily.map((row) => [row?.date, row]).filter(([date]) => date));
@@ -59,6 +59,7 @@
         rate: source.rate,
         usdJpy: source.usdJpy,
         tryJpy: source.usdJpy / source.rate,
+        valuationTryJpySource: 'synthetic',
         rateSource: 'provider',
         rateSourcePrice: 'ASK',
         rateSourceTimeframe: source.row?.sourceTimeframe || '60m',
@@ -68,10 +69,12 @@
           usdTryAskDayHighSource: source.row.verification || source.row.usdTryAskDayHighSource || 'provider'
         } : {})
       };
-      const differs = !existing
-        || !same(existing.rate, next.rate)
+      delete next.valuationTryJpy;
+      const differs = !same(existing.rate, next.rate)
         || !same(existing.usdJpy, next.usdJpy)
         || !same(existing.tryJpy, next.tryJpy)
+        || Number(existing.valuationTryJpy) > 0
+        || existing.valuationTryJpySource !== 'synthetic'
         || existing.rateSource !== 'provider'
         || existing.rateSourceTimeframe !== next.rateSourceTimeframe
         || existing.rateSourceBarTime !== next.rateSourceBarTime
@@ -88,6 +91,7 @@
     localStorage.setItem(STATE_KEY, JSON.stringify(state));
     try { calendarCursor = monthFromLatest(); } catch (_) {}
     try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
+    try { window.__DTL_BACKEND_INVALIDATE__?.(); } catch (_) {}
     return changed;
   };
 
@@ -141,19 +145,18 @@
       hiddenForm?.after(card);
     }
     const row = (derivedDaily() || []).at(-1) || null;
-    if (!row) {
-      card.innerHTML = '<p>配信データを待っています。</p>';
-      return;
-    }
-    const usdJpy = usdJpyFor(row);
-    card.innerHTML = `
-      <div class="readonly-daily-date"><span>${row.date}</span><small>閲覧専用</small></div>
-      <div class="readonly-daily-grid">
-        <div><span>USD/TRY</span><strong>${rateFmt(row.rate)}</strong></div>
-        <div><span>USD/JPY</span><strong>${usdJpy > 0 ? num(usdJpy,3) : '—'}</strong></div>
-        <div><span>TRY/JPY</span><strong>${rateFmt(row.tryJpy)}</strong></div>
-        <div><span>Swap / lot</span><strong>${money(Number(row.swapPerLot || 0))}</strong></div>
-      </div>`;
+    const html = !row ? '<p>配信データを待っています。</p>' : (() => {
+      const usdJpy = usdJpyFor(row);
+      return `
+        <div class="readonly-daily-date"><span>${row.date}</span><small>閲覧専用</small></div>
+        <div class="readonly-daily-grid">
+          <div><span>USD/TRY</span><strong>${rateFmt(row.rate)}</strong></div>
+          <div><span>USD/JPY</span><strong>${usdJpy > 0 ? num(usdJpy,3) : '—'}</strong></div>
+          <div><span>TRY/JPY</span><strong>${rateFmt(row.tryJpy)}</strong></div>
+          <div><span>Swap / lot</span><strong>${money(Number(row.swapPerLot || 0))}</strong></div>
+        </div>`;
+    })();
+    if (card.innerHTML !== html) card.innerHTML = html;
   };
 
   const enforceReadOnlyUi = () => {
@@ -179,6 +182,8 @@
     ['settingTryJpy', 'settingSwap', 'settingSwapMode', 'settingRateSource'].forEach(hideControlLabel);
     document.getElementById('referenceRebuildNote')?.setAttribute('hidden', '');
     document.getElementById('rebuildReferenceDataBtn')?.setAttribute('hidden', '');
+    const reset = document.getElementById('resetAllBtn');
+    if (reset) reset.textContent = 'ユーザーデータを初期化';
 
     ensureLatestCard();
   };
@@ -210,7 +215,6 @@
 
   const baseRenderAll = renderAll;
   renderAll = function(...args) {
-    // Published rows are authoritative for covered dates; positions/settings remain untouched.
     syncPublishedRates();
     const result = baseRenderAll.apply(this, args);
     enforceReadOnlyUi();
@@ -218,13 +222,9 @@
   };
 
   const refreshFromProvider = () => {
-    const changed = syncPublishedRates();
-    if (changed) {
-      try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
-    }
+    syncPublishedRates();
     try { baseRenderAll(); } catch (_) {}
     enforceReadOnlyUi();
-    return changed;
   };
 
   const rootObserver = new MutationObserver((mutations) => {
@@ -240,12 +240,10 @@
     attributeFilter: ['data-hirose-rate-history-ready','data-live-rate-refresh-ready','data-hirose-history-ready']
   });
 
-  // Dynamic legacy settings can be recreated by asynchronous source loaders. Keep
-  // them in the DOM for compatibility but hidden from the public service UI.
-  const bodyObserver = new MutationObserver(() => enforceReadOnlyUi());
-  bodyObserver.observe(document.body, { childList: true, subtree: true });
-
-  window.__DTL_SYNC_PUBLISHED_DAILY__ = () => refreshFromProvider();
+  window.__DTL_SYNC_PUBLISHED_DAILY__ = () => {
+    refreshFromProvider();
+    return true;
+  };
   root.dataset.dailyDataService = '1';
   root.dataset.dailyDataMode = 'provider-readonly';
   root.dataset.dailyRateAuthority = 'published-feed';
