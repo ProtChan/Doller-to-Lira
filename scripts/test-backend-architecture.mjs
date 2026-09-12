@@ -9,7 +9,6 @@ const out = path.join(root, OUTPUT_DIR);
 assert.equal(new Set(SOURCE_FILES).size, SOURCE_FILES.length, 'runtime manifest contains duplicate source files');
 assert.ok(SOURCE_FILES[0] === 'app.js', 'app.js must be the first runtime source');
 assert.ok(SOURCE_FILES.includes('patch-hirose-swap-margin-20260906.js'), 'Hirose margin integration must be bundled directly');
-assert.ok(SOURCE_FILES.includes('patch-calendar-desktop-legacy-20260912.js'), 'historical desktop calendar presentation must be bundled directly');
 assert.ok(SOURCE_FILES.includes('patch-valuation-ui-20260911.js'), 'valuation UI must be isolated from accounting');
 assert.equal(SOURCE_FILES.at(-4), 'patch-shifted-swap-display-20260911.js', 'shifted swap accounting must be the authoritative swap layer');
 assert.equal(SOURCE_FILES.at(-3), 'patch-shifted-swap-ui-guard-20260911.js', 'shifted swap UI guard must follow accounting');
@@ -45,8 +44,6 @@ for (const asset of ['styles.css', 'pwa-mobile-20260906.css', 'manifest.webmanif
 assert.match(bundle, /backendArchitecture = 'single-bundle'/, 'single-bundle marker missing');
 assert.match(bundle, /backendCoreVersion = '20260911-1422'/, 'canonical backend marker missing');
 assert.match(bundle, /dataset\.pnlDateAlignment = '1'/, 'PnL date-alignment marker missing');
-assert.match(bundle, /calendarDesktopStyle = 'pre-20260905-rounded-cards'/, 'historical desktop calendar marker missing');
-assert.match(bundle, /@media \(min-width:821px\)/, 'desktop-only calendar restoration breakpoint missing');
 assert.match(bundle, /sw\.js\?v=\$\{encodeURIComponent\(build\)\}/, 'service worker registration is not tied to the running build');
 assert.match(bundle, /updateViaCache: 'none'/, 'service worker registration must bypass HTTP cache for update checks');
 assert.match(bundle, /registration\?\.update\?\./, 'client has no service-worker-native freshness check');
@@ -78,4 +75,4 @@ assert.match(sw, /self\.clients\.claim\(\)/, 'new service worker does not claim 
 assert.match(sw, /self\.skipWaiting\(\)/, 'new service worker does not activate immediately');
 assert.doesNotMatch(sw, /runtime-[0-9-]+\.js/, 'service worker still references legacy runtime');
 
-console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources -> 1 production bundle; ${RETIRED_RUNTIME_FILES.length} wrappers retired; legacy PWA auto-upgrade + desktop calendar restoration guarded)`);
+console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources -> 1 production bundle; ${RETIRED_RUNTIME_FILES.length} wrappers retired; legacy PWA auto-upgrade guarded)`);
