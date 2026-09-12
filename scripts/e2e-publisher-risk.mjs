@@ -28,7 +28,6 @@ try {
     usdJpyAskDayHigh: Number((Number(publisherBase.usdJpyAskClose23) * 1.004).toFixed(6))
   };
 
-  // Owner-only publisher serializes exactly what was entered, independent of any production snapshot.
   const publisher = await context.newPage();
   await publisher.goto(new URL('publish.html', baseUrl).href, { waitUntil: 'domcontentloaded' });
   await publisher.locator('#date').fill(publisherValues.date);
@@ -54,6 +53,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.askDayHighReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '2', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
 
   const fixture = await page.evaluate(() => {
     const rates = (window.__DTL_HIROSE_RATE_HISTORY__?.() || [])
@@ -67,11 +67,7 @@ try {
       rate: window.__DTL_HIROSE_RATE_AT__?.(high.date) || null
     })).filter((item) => item.rate && Number(item.rate.usdTryAskClose23) > 0 && Number(item.rate.usdJpyAskClose23) > 0);
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
-    return {
-      rates,
-      eligible,
-      settings: saved.settings || {}
-    };
+    return { rates, eligible, settings: saved.settings || {} };
   });
   assert.ok(fixture.rates.length > 0 && fixture.eligible.length > 0, 'risk test requires overlapping rate/high history');
 
@@ -90,14 +86,8 @@ try {
     const key = 'dollar-to-lira:v1';
     const saved = JSON.parse(localStorage.getItem(key) || '{}');
     saved.positions = [{
-      id:'worst-ask-risk-invariant',
-      date:positionDate,
-      side:'short',
-      entryRate,
-      lots,
-      memo:'risk invariant test',
-      closeDate:null,
-      closeRate:null
+      id:'worst-ask-risk-invariant', date:positionDate, side:'short', entryRate, lots,
+      memo:'risk invariant test', closeDate:null, closeRate:null
     }];
     saved.updatedAt = new Date().toISOString();
     localStorage.setItem(key, JSON.stringify(saved));
@@ -107,38 +97,14 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.worstAskRisk === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.privatePublisherDailyLayout === '2', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
 
   await page.locator('[data-tab="daily"]').click();
-  assert.equal(await page.locator('#openRatePublisherBtn').count(), 0, 'publisher link leaked into public daily UI');
-  console.log(`publisher hidden from public UI (${browserName}): PASS`);
-
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.waitForTimeout(100);
-  const alignment = await page.evaluate(() => {
-    const rect = (selector) => {
-      const el = document.querySelector(selector);
-      const r = el?.getBoundingClientRect();
-      return r ? { top:r.top, bottom:r.bottom, height:r.height } : null;
-    };
-    return {
-      date:rect('#dailyDate'),
-      rate:rect('#dailyRate'),
-      usdJpy:rect('#dailyUsdJpy'),
-      swap:rect('#dailySwap'),
-      save:rect('#dailyForm > button[type="submit"]'),
-      rateNote:!!document.querySelector('#dailyForm .rate-source-note'),
-      swapNote:!!document.querySelector('#dailyForm .swap-source-note')
-    };
-  });
-  assert.equal(alignment.rateNote, true, 'rate source note missing from daily form');
-  assert.equal(alignment.swapNote, true, 'swap source note missing from daily form');
-  const tops = [alignment.date, alignment.rate, alignment.usdJpy, alignment.swap, alignment.save].map((x) => Number(x?.top));
-  const heights = [alignment.date, alignment.rate, alignment.usdJpy, alignment.swap, alignment.save].map((x) => Number(x?.height));
-  assert.ok(tops.every(Number.isFinite), `daily control geometry missing: ${JSON.stringify(alignment)}`);
-  assert.ok(Math.max(...tops) - Math.min(...tops) <= 1.5, `daily controls are vertically misaligned: ${JSON.stringify(alignment)}`);
-  assert.ok(Math.max(...heights) - Math.min(...heights) <= 1.5, `daily controls have inconsistent heights: ${JSON.stringify(alignment)}`);
-  console.log(`daily input alignment (${browserName}): PASS`);
+  assert.equal(await page.locator('#openRatePublisherBtn').count(), 0, 'publisher link leaked into public Daily Data UI');
+  assert.equal(await page.locator('#dailyForm').isVisible(), false, 'Daily Data unexpectedly exposes an editor');
+  assert.equal(await page.locator('#dailyTableBody [data-delete-daily]').count(), 0, 'Daily Data unexpectedly exposes deletion');
+  assert.equal((await page.locator('[data-tab="daily"]').textContent())?.trim(), '日次データ');
+  console.log(`publisher hidden + public Daily Data read-only (${browserName}): PASS`);
 
   await page.locator('[data-tab="risk"]').click();
   await page.waitForFunction(() => {
