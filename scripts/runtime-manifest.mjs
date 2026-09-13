@@ -1,7 +1,8 @@
-export const BUILD = '20260913-1045';
+export const BUILD = '20260913-1535';
 
 // Canonical execution order for the browser application. Production never loads
 // these files individually: scripts/build-app.mjs concatenates them into one bundle.
+// Keep this list as the single source of truth for backend/runtime composition.
 export const SOURCE_FILES = [
   'app.js',
   // Legacy V2 utility/base compatibility. Remaining provider modules still use its
