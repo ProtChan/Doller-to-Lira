@@ -54,6 +54,9 @@ assert.match(bundle, /dataset\.dailyDataService = '1'/, 'read-only Daily Data se
 assert.match(bundle, /dailyDataMode = 'provider-readonly'/, 'provider-driven Daily Data mode marker missing');
 assert.match(bundle, /dailyRateAuthority = 'published-feed'/, 'published rate authority marker missing');
 assert.match(bundle, /dailySwapAuthority = 'hirose-feed'/, 'published swap authority marker missing');
+assert.match(bundle, /liveRateRefreshPolicy = 'boot-focus-visible-2min-manual-full-reconcile'/, 'live provider full-reconcile policy missing');
+assert.match(bundle, /cache:'no-store'/, 'provider live refresh must bypass HTTP cache');
+assert.match(bundle, /reason:'manual-api'/, 'manual provider refresh path missing');
 assert.match(bundle, /sw\.js\?v=\$\{encodeURIComponent\(build\)\}/, 'service worker registration is not tied to the running build');
 assert.match(bundle, /updateViaCache: 'none'/, 'service worker registration must bypass HTTP cache for update checks');
 assert.match(bundle, /registration\?\.update\?\./, 'client has no service-worker-native freshness check');
@@ -75,10 +78,13 @@ assert.match(sw, new RegExp(`app\\.bundle\\.js\\?v=${BUILD}`), 'service worker d
 for (const asset of ['styles.css', 'pwa-mobile-20260906.css', 'manifest.webmanifest', 'icon-dollar-lira.svg']) {
   assert.match(sw, new RegExp(`${asset.replaceAll('.', '\\.') }\\?v=${BUILD}`), `${asset} is not build-versioned in service worker shell`);
 }
+assert.match(sw, /isLiveProviderRate/, 'service worker has no explicit live-provider freshness path');
+assert.match(sw, /url\.searchParams\.has\('live'\)/, 'service worker does not recognize live provider reads');
+assert.match(sw, /if \(isLiveProviderRate\)[\s\S]*?fetch\(request, \{ cache: 'no-store' \}\)[\s\S]*?return;/, 'live provider reads must bypass Cache Storage and use network no-store');
 assert.match(sw, /hadPreviousAppCache/, 'service worker does not detect upgrades from an older app cache');
 assert.match(sw, /client\.navigate\(client\.url\)/, 'service worker does not reload legacy open clients on upgrade');
 assert.match(sw, /self\.clients\.claim\(\)/, 'new service worker does not claim existing clients');
 assert.match(sw, /self\.skipWaiting\(\)/, 'new service worker does not activate immediately');
 assert.doesNotMatch(sw, /runtime-[0-9-]+\.js/, 'service worker still references legacy runtime');
 
-console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources; ${RETIRED_RUNTIME_FILES.length} compatibility layers retired; provider-only accounting/core guarded)`);
+console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources; ${RETIRED_RUNTIME_FILES.length} compatibility layers retired; provider-only accounting/core + uncached live provider reads guarded)`);
