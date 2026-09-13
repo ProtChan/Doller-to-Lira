@@ -36,7 +36,18 @@ try {
     shiftedSwapAccountingActive: '1',
     dailyDataService: '1'
   })) {
-    await page.waitForFunction(({ key, value }) => document.documentElement.dataset[key] === value, { key, value }, { timeout: 15000 });
+    try {
+      await page.waitForFunction(({ key, value }) => document.documentElement.dataset[key] === value, { key, value }, { timeout: 15000 });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => ({
+        dataset: { ...document.documentElement.dataset },
+        toast: document.getElementById('toast')?.textContent || '',
+        readyState: document.readyState
+      }));
+      console.error(`READINESS TIMEOUT: ${key}=${value}`, JSON.stringify(diagnostic));
+      console.error('PAGE ERRORS:', JSON.stringify(pageErrors));
+      throw error;
+    }
   }
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.dailyDataMode === 'provider-readonly', { timeout: 15000 });
