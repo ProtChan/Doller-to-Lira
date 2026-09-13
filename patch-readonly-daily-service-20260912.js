@@ -62,6 +62,7 @@
         rateSourcePrice: 'ASK',
         rateSourceTimeframe: source.row?.sourceTimeframe || '60m',
         rateSourceBarTime: source.row?.sourceBarTime || '23:00 JST',
+        rateSourcePublishedAt: source.row?.publishedAt || undefined,
         ...(Number(source.row?.usdTryAskDayHigh) > 0 ? {
           usdTryAskDayHigh: Number(source.row.usdTryAskDayHigh),
           usdTryAskDayHighSource: source.row.verification || source.row.usdTryAskDayHighSource || 'provider'
@@ -77,6 +78,7 @@
         || existing.rateSource !== 'provider'
         || existing.rateSourceTimeframe !== next.rateSourceTimeframe
         || existing.rateSourceBarTime !== next.rateSourceBarTime
+        || String(existing.rateSourcePublishedAt || '') !== String(next.rateSourcePublishedAt || '')
         || (Number(next.usdTryAskDayHigh) > 0 && !same(existing.usdTryAskDayHigh, next.usdTryAskDayHigh));
 
       if (differs) {
@@ -135,6 +137,67 @@
     forceHide(input.closest('label') || input);
   };
 
+  const formatSyncTime = (isoValue) => {
+    if (!isoValue) return '未同期';
+    const date = new Date(isoValue);
+    if (!Number.isFinite(date.getTime())) return '同期済み';
+    return `最終同期 ${date.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' })}`;
+  };
+
+  const setRefreshStatus = (text, stateName = 'idle') => {
+    const status = document.getElementById('dailyRefreshStatus');
+    const button = document.getElementById('refreshDailyDataBtn');
+    if (status) status.textContent = text;
+    if (button) button.dataset.refreshState = stateName;
+  };
+
+  let refreshFromProvider = () => {};
+
+  const ensureRefreshControls = () => {
+    const head = document.querySelector('#view-daily .section-head');
+    if (!head) return;
+    let controls = document.getElementById('dailyRefreshControls');
+    if (!controls) {
+      controls = document.createElement('div');
+      controls.id = 'dailyRefreshControls';
+      controls.className = 'daily-refresh-controls';
+      controls.innerHTML = '<button class="outline-btn" id="refreshDailyDataBtn" type="button">配信データを更新</button><small id="dailyRefreshStatus">未同期</small>';
+      const meta = head.querySelector('.section-meta');
+      if (meta) meta.before(controls); else head.appendChild(controls);
+    }
+    const button = document.getElementById('refreshDailyDataBtn');
+    if (button && !button.dataset.bound) {
+      button.dataset.bound = '1';
+      button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        const original = button.textContent;
+        button.textContent = '更新中…';
+        setRefreshStatus('配信元を確認中…', 'pending');
+        try {
+          const result = typeof window.__DTL_REFRESH_HIROSE_RATES__ === 'function'
+            ? await window.__DTL_REFRESH_HIROSE_RATES__(true)
+            : null;
+          refreshFromProvider();
+          const updated = Number(result?.updated || 0);
+          const added = Number(result?.added || 0);
+          const suffix = updated || added ? ` · 更新 ${updated}件 / 追加 ${added}件` : ' · 最新です';
+          setRefreshStatus(`${formatSyncTime(root.dataset.liveRateRefreshLastAt)}${suffix}`, 'success');
+          try { toast(updated || added ? '最新の配信データを反映しました' : '配信データは最新です'); } catch (_) {}
+        } catch (error) {
+          setRefreshStatus('更新失敗 · 通信状態を確認', 'error');
+          try { toast('配信データの更新に失敗しました'); } catch (_) {}
+        } finally {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      });
+    }
+    if (root.dataset.liveRateRefreshLastAt && button?.dataset.refreshState !== 'pending') {
+      setRefreshStatus(formatSyncTime(root.dataset.liveRateRefreshLastAt), 'idle');
+    }
+  };
+
   const ensureLatestCard = () => {
     const host = document.querySelector('#view-overview .quick-entry');
     if (!host) return;
@@ -179,6 +242,7 @@
 
     const reset = document.getElementById('resetAllBtn');
     if (reset) reset.textContent = 'ユーザーデータを初期化';
+    ensureRefreshControls();
     ensureLatestCard();
   };
 
@@ -197,8 +261,18 @@
     .daily-source-badge{display:inline-flex;border-radius:999px;padding:3px 7px;font-size:7px;font-weight:850;letter-spacing:.05em;border:1px solid var(--line)}
     .daily-source-badge.provider{color:var(--accent)}
     .daily-source-badge.legacy{color:var(--muted2)}
+    .daily-refresh-controls{display:flex;align-items:center;gap:8px;margin-left:auto}
+    .daily-refresh-controls .outline-btn{min-height:34px;padding:7px 11px;font-size:10px;white-space:nowrap}
+    .daily-refresh-controls .outline-btn:disabled{opacity:.55;cursor:wait}
+    .daily-refresh-controls small{font-size:8px;color:var(--muted2);white-space:nowrap}
+    .daily-refresh-controls [data-refresh-state="error"]+small{color:var(--red)}
     #view-daily .daily-table-wrap{margin-top:0}
-    @media(max-width:820px){.readonly-daily-latest{margin-top:10px}}
+    @media(max-width:820px){
+      .readonly-daily-latest{margin-top:10px}
+      #view-daily .section-head{flex-wrap:wrap}
+      .daily-refresh-controls{order:3;width:100%;margin-left:0;justify-content:flex-end}
+      .daily-refresh-controls small{font-size:7px}
+    }
   `;
   document.head.appendChild(style);
 
@@ -210,7 +284,7 @@
     return result;
   };
 
-  const refreshFromProvider = () => {
+  refreshFromProvider = () => {
     syncPublishedRates();
     try { baseRenderAll(); } catch (_) {}
     enforceReadOnlyUi();
@@ -220,13 +294,26 @@
     const providerChanged = mutations.some((mutation) => [
       'data-hirose-rate-history-ready',
       'data-live-rate-refresh-ready',
+      'data-live-rate-refresh-generation',
       'data-hirose-history-ready'
     ].includes(mutation.attributeName));
     if (providerChanged) refreshFromProvider();
   });
   rootObserver.observe(root, {
     attributes: true,
-    attributeFilter: ['data-hirose-rate-history-ready','data-live-rate-refresh-ready','data-hirose-history-ready']
+    attributeFilter: ['data-hirose-rate-history-ready','data-live-rate-refresh-ready','data-live-rate-refresh-generation','data-hirose-history-ready']
+  });
+
+  window.addEventListener('dtl:provider-rates-refreshed', (event) => {
+    refreshFromProvider();
+    const detail = event.detail || {};
+    const suffix = Number(detail.updated || 0) || Number(detail.added || 0)
+      ? ` · 更新 ${Number(detail.updated || 0)}件 / 追加 ${Number(detail.added || 0)}件`
+      : ' · 最新';
+    setRefreshStatus(`${formatSyncTime(detail.finishedAt || root.dataset.liveRateRefreshLastAt)}${suffix}`, 'success');
+  });
+  window.addEventListener('dtl:provider-rates-refresh-error', () => {
+    setRefreshStatus('自動更新失敗 · 手動更新できます', 'error');
   });
 
   window.__DTL_SYNC_PUBLISHED_DAILY__ = () => {
@@ -237,6 +324,7 @@
   root.dataset.dailyDataMode = 'provider-readonly';
   root.dataset.dailyRateAuthority = 'published-feed';
   root.dataset.dailySwapAuthority = 'hirose-feed';
+  root.dataset.dailyManualRefresh = '1';
 
   refreshFromProvider();
 })();
