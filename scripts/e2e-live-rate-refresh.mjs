@@ -5,7 +5,13 @@ const targetUrl = process.env.TEST_URL || 'http://127.0.0.1:4173/';
 const browserName = (process.env.BROWSER || 'chromium').toLowerCase();
 const browserType = browserName === 'webkit' ? webkit : chromium;
 const browser = await browserType.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+// This test measures actual provider requests made by the page. Service Worker cache/
+// interception behavior is guarded separately in the production SW architecture test.
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  isMobile: true,
+  serviceWorkers: 'block'
+});
 
 const currentResponse = await context.request.get(new URL('data/hirose-ask-close-23.json', targetUrl).href);
 assert.equal(currentResponse.ok(), true, `current Hirose rate feed failed: ${currentResponse.status()}`);
@@ -125,6 +131,7 @@ try {
   const beforeFetches = liveFetchCount;
   await page.locator('#refreshDailyDataBtn').click();
   await page.waitForFunction((generation) => Number(document.documentElement.dataset.liveRateRefreshGeneration || 0) > generation, beforeGeneration, { timeout: 10000 });
+  await page.waitForFunction(() => document.documentElement.dataset.liveRateRefreshReason === 'manual-api', { timeout: 10000 });
   await page.waitForFunction(() => /最終同期/.test(document.getElementById('dailyRefreshStatus')?.textContent || ''), { timeout: 10000 });
   assert.ok(liveFetchCount > beforeFetches, 'manual refresh did not issue a fresh provider request');
   assert.match(await page.locator('#dailyRefreshStatus').textContent(), /最終同期/);
