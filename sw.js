@@ -82,6 +82,18 @@ self.addEventListener('fetch', (event) => {
   const isData = url.pathname.includes('/data/');
   const isRuntime = /\/runtime-[^/]+\.js$/.test(url.pathname);
   const isImmutableAsset = !isNavigation && !isData && !isRuntime && /\.(?:js|css|svg|webmanifest)$/.test(url.pathname);
+  const isLiveProviderRate = isData
+    && url.pathname.endsWith('/hirose-ask-close-23.json')
+    && url.searchParams.has('live');
+
+  // Live provider reads are an explicit freshness boundary. Never satisfy them from
+  // Cache Storage and never save them there: online clients must observe the newest
+  // publish correction, while offline clients should report refresh failure instead
+  // of presenting an old response as freshly synchronized.
+  if (isLiveProviderRate) {
+    event.respondWith(fetch(request, { cache: 'no-store' }));
+    return;
+  }
 
   if (isRuntime) {
     event.respondWith((async () => {
