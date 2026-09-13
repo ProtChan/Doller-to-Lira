@@ -48,10 +48,8 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium webkit
 
-      # Daily rate/swap entry is now provider-owned and read-only. The old tests for
-      # manual daily save, manual source switching, pending input notes and manual
-      # valuation entry are intentionally retired from the production gate.
-      - name: Real Chromium DOM interaction test (local production build)
+      # Full regression suite once in Chromium. This is the broad functional gate.
+      - name: Full Chromium regression (local production build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/dtl-http.log 2>&1 &
           SERVER_PID=$!
@@ -69,7 +67,9 @@ jobs:
             BROWSER=chromium node "$test"
           done
 
-      - name: Real WebKit DOM interaction test (local production build)
+      # WebKit runs only browser-sensitive interaction/PWA/rendering paths. Pure
+      # accounting invariants are already exercised by the full Chromium gate.
+      - name: WebKit browser-sensitive regression (local production build)
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/dtl-http-webkit.log 2>&1 &
           SERVER_PID=$!
@@ -78,8 +78,6 @@ jobs:
             scripts/e2e.mjs \
             scripts/e2e-live-rate-refresh.mjs \
             scripts/e2e-close-conversion.mjs \
-            scripts/e2e-capital-history.mjs \
-            scripts/e2e-hirose-weekend.mjs \
             scripts/e2e-pnl-date-alignment.mjs \
             scripts/e2e-rate-edit-performance.mjs \
             scripts/e2e-publisher-risk.mjs \
@@ -101,7 +99,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Real Chromium DOM interaction test (deployed Pages)
+      # Deployed checks verify hosting/cache/network integration rather than repeating
+      # every local accounting test a second time.
+      - name: Chromium deployed smoke/regression
         env:
           TEST_URL: ${{ steps.deployment.outputs.page_url }}
           BROWSER: chromium
@@ -109,17 +109,13 @@ jobs:
           for test in \
             scripts/e2e.mjs \
             scripts/e2e-live-rate-refresh.mjs \
-            scripts/e2e-close-conversion.mjs \
-            scripts/e2e-capital-history.mjs \
-            scripts/e2e-hirose-weekend.mjs \
             scripts/e2e-pnl-date-alignment.mjs \
-            scripts/e2e-rate-edit-performance.mjs \
             scripts/e2e-publisher-risk.mjs \
             scripts/e2e-layout.mjs; do
             node "$test"
           done
 
-      - name: Real WebKit DOM interaction test (deployed Pages)
+      - name: WebKit deployed smoke/regression
         env:
           TEST_URL: ${{ steps.deployment.outputs.page_url }}
           BROWSER: webkit
@@ -127,12 +123,7 @@ jobs:
           for test in \
             scripts/e2e.mjs \
             scripts/e2e-live-rate-refresh.mjs \
-            scripts/e2e-close-conversion.mjs \
-            scripts/e2e-capital-history.mjs \
-            scripts/e2e-hirose-weekend.mjs \
             scripts/e2e-pnl-date-alignment.mjs \
-            scripts/e2e-rate-edit-performance.mjs \
-            scripts/e2e-publisher-risk.mjs \
             scripts/e2e-layout.mjs; do
             node "$test"
           done
