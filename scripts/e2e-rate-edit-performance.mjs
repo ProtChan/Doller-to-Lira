@@ -15,26 +15,25 @@ const near = (actual, expected, label) => assert.ok(
 );
 
 try {
-  console.log('EDIT/PERF SERVICE MODE BROWSER=', browserName);
-  console.log('EDIT/PERF SERVICE MODE TEST_URL=', targetUrl);
+  console.log('POSITION EDIT / BACKEND CACHE BROWSER=', browserName);
+  console.log('TEST_URL=', targetUrl);
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
-  await page.waitForFunction(() => document.documentElement.dataset.rateEditPerformance === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.positionEditCore === '1', { timeout: 15000 });
+  await page.waitForFunction(() => document.documentElement.dataset.backendCore === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.dailyDataService === '1', { timeout: 15000 });
 
   const markers = await page.evaluate(() => ({
     editing: document.documentElement.dataset.positionEditing,
-    cache: document.documentElement.dataset.performanceCache,
-    derivedCache: document.documentElement.dataset.derivedCache,
     fastLc: document.documentElement.dataset.fastLc,
+    backend: document.documentElement.dataset.backendCoreVersion,
     dailyMode: document.documentElement.dataset.dailyDataMode,
     rateAuthority: document.documentElement.dataset.dailyRateAuthority
   }));
   assert.equal(markers.editing, '1');
-  assert.equal(markers.cache, '1');
-  assert.equal(markers.derivedCache, '1');
   assert.equal(markers.fastLc, '1');
+  assert.match(markers.backend || '', /provider-core/);
   assert.equal(markers.dailyMode, 'provider-readonly');
   assert.equal(markers.rateAuthority, 'published-feed');
 
@@ -42,10 +41,7 @@ try {
     const hirose = (window.__DTL_HIROSE_RATE_HISTORY__?.() || [])
       .filter((row) => row?.date && Number(row.usdTryAskClose23) > 0)
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    return {
-      date: hirose[0]?.date || '',
-      positionRate: Number(hirose[0]?.usdTryAskClose23 || 0)
-    };
+    return { date: hirose[0]?.date || '', positionRate: Number(hirose[0]?.usdTryAskClose23 || 0) };
   });
   assert.ok(fixture.date && fixture.positionRate > 0, 'dynamic position fixture unavailable');
 
@@ -53,7 +49,6 @@ try {
   assert.equal(await page.locator('#dailyForm').isVisible(), false, 'Daily Data must remain read-only');
   assert.equal(await page.locator('#dailyTableBody [data-delete-daily]').count(), 0, 'Daily Data must have no delete action');
 
-  // Position editing remains available even though rate/daily editing is retired.
   const initialLots = 1;
   const editedLots = initialLots * 2.5;
   const editedRate = Number((fixture.positionRate * 0.99).toFixed(4));
@@ -79,18 +74,24 @@ try {
   near(await page.locator('#editPositionLots').inputValue(), editedLots, 'edited position lots');
   assert.equal(await page.locator('#editPositionMemo').inputValue(), 'after edit');
   await page.locator('#cancelEditPositionBtn').click();
-  console.log('open position editing transformation: PASS');
+  console.log('open position editing: PASS');
 
-  const perf = await page.evaluate(() => window.__DTL_PERF_STATS__?.());
-  assert.ok(perf, 'performance stats unavailable');
-  assert.ok(perf.derivedComputations >= 1, `derived computations invalid: ${JSON.stringify(perf)}`);
-  assert.ok(perf.derivedCacheHits >= 1, `derived cache was never used: ${JSON.stringify(perf)}`);
-  assert.ok(Number.isFinite(perf.lastDerivedMs));
-  assert.ok(Number.isFinite(perf.lastRenderMs));
-  console.log('performance stats=', perf);
+  const cache = await page.evaluate(() => {
+    derivedDaily();
+    const before = window.__DTL_BACKEND_STATS__?.() || null;
+    derivedDaily();
+    const after = window.__DTL_BACKEND_STATS__?.() || null;
+    return { before, after };
+  });
+  assert.ok(cache.before && cache.after, 'canonical backend stats unavailable');
+  assert.equal(cache.after.architecture, 'provider-readonly-core');
+  assert.ok(cache.after.derivedComputations >= 1, `derived computations invalid: ${JSON.stringify(cache)}`);
+  assert.ok(cache.after.derivedCacheHits > cache.before.derivedCacheHits, `canonical derived cache was not reused: ${JSON.stringify(cache)}`);
+  assert.ok(Number.isFinite(cache.after.lastDerivedMs));
+  console.log('single canonical derived cache: PASS');
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-  console.log(`EDIT/PERF SERVICE MODE E2E (${browserName}): PASS`);
+  console.log(`POSITION EDIT / BACKEND CACHE (${browserName}): PASS`);
 } finally {
   await browser.close();
 }
