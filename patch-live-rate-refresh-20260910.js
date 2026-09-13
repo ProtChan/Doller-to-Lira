@@ -13,18 +13,17 @@
   let liveByDate = new Map();
   let refreshPromise = null;
   let lastRefreshAt = 0;
+  let fallbackRateAt = typeof window.__DTL_HIROSE_RATE_AT__ === 'function'
+    ? window.__DTL_HIROSE_RATE_AT__
+    : null;
+  let fallbackHistory = typeof window.__DTL_HIROSE_RATE_HISTORY__ === 'function'
+    ? window.__DTL_HIROSE_RATE_HISTORY__
+    : null;
 
   const isAuto = () => {
     const value = localStorage.getItem(RATE_SOURCE_KEY) || 'auto';
     return value !== 'saved' && value !== 'manual';
   };
-
-  const originalRateAt = typeof window.__DTL_HIROSE_RATE_AT__ === 'function'
-    ? window.__DTL_HIROSE_RATE_AT__
-    : null;
-  const originalHistory = typeof window.__DTL_HIROSE_RATE_HISTORY__ === 'function'
-    ? window.__DTL_HIROSE_RATE_HISTORY__
-    : null;
 
   const liveRateAt = (date) => liveByDate.get(date) || null;
   const supplementalHighAt = (date) => {
@@ -56,7 +55,7 @@
     const live = liveRateAt(date);
     if (live) return withSupplementalHigh(live, date);
     try {
-      const row = typeof originalRateAt === 'function' ? originalRateAt(date) : null;
+      const row = typeof fallbackRateAt === 'function' ? fallbackRateAt(date) : null;
       return row ? withSupplementalHigh(row, date) : null;
     } catch (_) {
       return null;
@@ -66,7 +65,7 @@
   function wrappedHistory() {
     const merged = new Map();
     try {
-      const base = typeof originalHistory === 'function' ? originalHistory() : [];
+      const base = typeof fallbackHistory === 'function' ? fallbackHistory() : [];
       if (Array.isArray(base)) base.forEach((row) => { if (row?.date) merged.set(row.date, { ...row }); });
     } catch (_) {}
     liveByDate.forEach((row, date) => merged.set(date, withSupplementalHigh(row, date)));
@@ -74,6 +73,10 @@
   }
 
   const installRateLookup = () => {
+    const currentRateAt = window.__DTL_HIROSE_RATE_AT__;
+    const currentHistory = window.__DTL_HIROSE_RATE_HISTORY__;
+    if (typeof currentRateAt === 'function' && currentRateAt !== wrappedRateAt) fallbackRateAt = currentRateAt;
+    if (typeof currentHistory === 'function' && currentHistory !== wrappedHistory) fallbackHistory = currentHistory;
     window.__DTL_HIROSE_RATE_AT__ = wrappedRateAt;
     window.__DTL_HIROSE_RATE_HISTORY__ = wrappedHistory;
   };
@@ -90,8 +93,8 @@
   const same = (a, b) => Math.abs(Number(a || 0) - Number(b || 0)) < 1e-10;
 
   // Reconcile every published date, not only missing dates. This is the key rule
-  // that makes owner corrections (for example a revised 2026-09-07 close) replace
-  // stale client-side snapshots without clearing the user's positions/settings.
+  // that makes owner corrections replace stale client-side snapshots without
+  // clearing the user's positions/settings.
   const reconcilePublishedRows = () => {
     if (!Array.isArray(state?.daily) || !liveByDate.size) return { added: 0, updated: 0 };
     const byDate = new Map(state.daily.map((row) => [row?.date, row]).filter(([date]) => date));
@@ -288,5 +291,11 @@
   bind();
   root.dataset.liveRateRefresh = '1';
   root.dataset.liveRateRefreshPolicy = 'boot-focus-visible-2min-manual-full-reconcile';
-  setTimeout(() => refresh({ force: true, reason: 'boot' }).catch(() => {}), 0);
+
+  // Defer the first network reconciliation until after app bootstrap. app.js
+  // registered its DOMContentLoaded handler earlier in the bundle, so this avoids
+  // racing renderAll/fillDefaults while still refreshing immediately on startup.
+  const bootRefresh = () => refresh({ force: true, reason: 'boot' }).catch(() => {});
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootRefresh, { once:true });
+  else setTimeout(bootRefresh, 0);
 })();
