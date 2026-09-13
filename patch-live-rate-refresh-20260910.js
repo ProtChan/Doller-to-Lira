@@ -188,6 +188,17 @@
     return refreshPromise;
   };
 
+  // A user's explicit refresh must always perform a new network read. If an automatic
+  // lifecycle/interval refresh is already in flight, wait for it to settle and then
+  // issue one additional no-store request rather than merely sharing that promise.
+  const manualRefresh = async () => {
+    const inFlight = refreshPromise;
+    if (inFlight) {
+      try { await inFlight; } catch (_) {}
+    }
+    return refresh({ force:true, reason:'manual-api' });
+  };
+
   const lifecycleRefresh = (reason) => {
     if (document.visibilityState === 'hidden') return;
     if (Date.now() - lastRefreshAt < LIFECYCLE_MIN_GAP_MS && liveByDate.size) return;
@@ -200,7 +211,7 @@
   });
   observer.observe(root, { attributes:true, attributeFilter:['data-hirose-rate-history-ready'] });
 
-  window.__DTL_REFRESH_HIROSE_RATES__ = (force=true) => refresh({ force:!!force, reason:'manual-api' });
+  window.__DTL_REFRESH_HIROSE_RATES__ = () => manualRefresh();
   window.__DTL_LIVE_HIROSE_RATE_AT__ = (date) => liveRateAt(date);
   window.__DTL_LIVE_HIROSE_RATE_HISTORY__ = () => [...liveByDate.values()].map((row) => enrich(row, row.date));
 
