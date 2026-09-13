@@ -7,21 +7,21 @@ const root = process.cwd();
 const out = path.join(root, OUTPUT_DIR);
 
 assert.equal(new Set(SOURCE_FILES).size, SOURCE_FILES.length, 'runtime manifest contains duplicate source files');
+assert.equal(SOURCE_FILES.length, 18, 'provider runtime unexpectedly regained a compatibility layer');
 assert.ok(SOURCE_FILES[0] === 'app.js', 'app.js must be the first runtime source');
-assert.ok(SOURCE_FILES.includes('patch-hirose-swap-margin-20260906.js'), 'Hirose margin integration must be bundled directly');
-assert.ok(SOURCE_FILES.includes('patch-valuation-ui-20260911.js'), 'valuation UI compatibility layer must remain bundled');
-assert.equal(SOURCE_FILES.at(-5), 'patch-shifted-swap-display-20260911.js', 'shifted swap accounting must be the authoritative swap layer');
-assert.equal(SOURCE_FILES.at(-4), 'patch-shifted-swap-ui-guard-20260911.js', 'shifted swap UI guard must follow accounting');
-assert.equal(SOURCE_FILES.at(-3), 'patch-backend-final-20260911.js', 'canonical backend must own the final accounting hot path');
-assert.equal(SOURCE_FILES.at(-2), 'patch-pnl-date-alignment-20260911.js', 'PnL date-alignment presentation must follow accounting');
-assert.equal(SOURCE_FILES.at(-1), 'patch-readonly-daily-service-20260912.js', 'provider-driven read-only Daily Data mode must be the final public policy layer');
+assert.ok(SOURCE_FILES.includes('patch-hirose-core-20260913.js'), 'unified Hirose core must be bundled');
+assert.ok(SOURCE_FILES.includes('patch-position-edit-fast-lc-20260913.js'), 'position editing/fast LC core must be bundled');
+assert.ok(SOURCE_FILES.includes('patch-ask-day-high-20260913.js'), 'read-only ASK-high feed must be bundled');
+assert.ok(SOURCE_FILES.includes('patch-private-publisher-layout-20260913.js'), 'public compact layout must be bundled');
+assert.equal(SOURCE_FILES.at(-4), 'patch-backend-core-20260913.js', 'canonical provider backend must own derived accounting');
+assert.equal(SOURCE_FILES.at(-3), 'patch-calendar-swap-days-20260913.js', 'calendar swap-day badge must be presentation-only');
+assert.equal(SOURCE_FILES.at(-2), 'patch-pnl-date-alignment-20260911.js', 'PnL presentation must follow accounting');
+assert.equal(SOURCE_FILES.at(-1), 'patch-readonly-daily-service-20260912.js', 'provider-readonly policy must be the final runtime layer');
 for (const retired of RETIRED_RUNTIME_FILES) {
   assert.ok(!SOURCE_FILES.includes(retired), `${retired} is retired and must not be in production runtime`);
 }
 
-for (const file of [...SOURCE_FILES, ...RETIRED_RUNTIME_FILES]) {
-  await fs.access(path.join(root, file));
-}
+for (const file of [...SOURCE_FILES, ...RETIRED_RUNTIME_FILES]) await fs.access(path.join(root, file));
 
 const [index, bundle, sw, metaText] = await Promise.all([
   fs.readFile(path.join(out, 'index.html'), 'utf8'),
@@ -43,7 +43,12 @@ for (const asset of ['styles.css', 'pwa-mobile-20260906.css', 'manifest.webmanif
 }
 
 assert.match(bundle, /backendArchitecture = 'single-bundle'/, 'single-bundle marker missing');
-assert.match(bundle, /backendCoreVersion = '20260911-1422'/, 'canonical backend marker missing');
+assert.match(bundle, /dataset\.hiroseCore = '1'/, 'unified Hirose core marker missing');
+assert.match(bundle, /backendCoreVersion = '20260913-provider-core'/, 'provider backend marker missing');
+assert.match(bundle, /architecture:'provider-readonly-core'/, 'provider backend stats marker missing');
+assert.match(bundle, /dataset\.positionEditCore = '1'/, 'position-edit core marker missing');
+assert.match(bundle, /dataset\.askDayHighCore = '1'/, 'ASK-high core marker missing');
+assert.match(bundle, /dataset\.calendarSwapDaysBadge = '1'/, 'calendar swap badge marker missing');
 assert.match(bundle, /dataset\.pnlDateAlignment = '1'/, 'PnL date-alignment marker missing');
 assert.match(bundle, /dataset\.dailyDataService = '1'/, 'read-only Daily Data service marker missing');
 assert.match(bundle, /dailyDataMode = 'provider-readonly'/, 'provider-driven Daily Data mode marker missing');
@@ -59,12 +64,8 @@ assert.doesNotMatch(bundle, /build-meta\.json\?t=/, 'client must not use metadat
 assert.doesNotMatch(bundle, /\beval\s*\(/, 'bundle contains eval()');
 assert.doesNotMatch(bundle, /fetch\s*\([^\n;]*\.js(?:[?`'\"]|\b)/, 'bundle dynamically fetches JavaScript');
 assert.doesNotMatch(bundle, /runtime-[0-9-]+\.js/, 'bundle references a legacy runtime loader');
-for (const file of SOURCE_FILES) {
-  assert.ok(bundle.includes(`/* ===== ${file} ===== */`), `bundle missing source boundary for ${file}`);
-}
-for (const retired of RETIRED_RUNTIME_FILES) {
-  assert.ok(!bundle.includes(`/* ===== ${retired} ===== */`), `retired runtime leaked into production bundle: ${retired}`);
-}
+for (const file of SOURCE_FILES) assert.ok(bundle.includes(`/* ===== ${file} ===== */`), `bundle missing source boundary for ${file}`);
+for (const retired of RETIRED_RUNTIME_FILES) assert.ok(!bundle.includes(`/* ===== ${retired} ===== */`), `retired runtime leaked into production bundle: ${retired}`);
 
 assert.equal(meta.build, BUILD, 'build metadata version mismatch');
 assert.equal(meta.architecture, 'single-bundle');
@@ -80,4 +81,4 @@ assert.match(sw, /self\.clients\.claim\(\)/, 'new service worker does not claim 
 assert.match(sw, /self\.skipWaiting\(\)/, 'new service worker does not activate immediately');
 assert.doesNotMatch(sw, /runtime-[0-9-]+\.js/, 'service worker still references legacy runtime');
 
-console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources -> 1 production bundle; ${RETIRED_RUNTIME_FILES.length} wrappers retired; provider-readonly Daily Data + legacy PWA auto-upgrade guarded)`);
+console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources; ${RETIRED_RUNTIME_FILES.length} compatibility layers retired; provider-only accounting/core guarded)`);
