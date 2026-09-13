@@ -17,7 +17,7 @@ const currentRows = Array.isArray(currentFeed?.history)
   : [];
 assert.ok(currentRows.length >= 3, 'need at least three Hirose rate rows for correction test');
 const latest = currentRows.at(-1);
-const correctionTarget = currentRows.find((row) => row.date === '2026-09-07') || currentRows.at(-2);
+const correctionTarget = currentRows.slice(0, -1).reverse().find((row) => row?.publishedAt) || currentRows.at(-2);
 const previous = currentRows.at(-2);
 const staleRate = Number((Number(correctionTarget.usdTryAskClose23) * 1.0007).toFixed(6));
 const staleUsdJpy = Number((Number(correctionTarget.usdJpyAskClose23) * 0.9993).toFixed(6));
@@ -33,7 +33,7 @@ await context.route(/\/data\/hirose-ask-close-23\.json\?rates=/, async (route) =
     ? data.history
         .filter((row) => row?.date !== latest.date)
         .map((row) => row?.date === correctionTarget.date
-          ? { ...row, usdTryAskClose23: staleRate, usdJpyAskClose23: staleUsdJpy, publishedAt: '2026-01-01T00:00:00Z' }
+          ? { ...row, usdTryAskClose23: staleRate, usdJpyAskClose23: staleUsdJpy, publishedAt: '' }
           : row)
     : [];
   await route.fulfill({
