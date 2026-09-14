@@ -24,25 +24,14 @@ const currentRows = Array.isArray(currentFeed?.history)
 assert.ok(currentRows.length >= 3, 'need at least three Hirose rate rows for correction test');
 const latest = currentRows.at(-1);
 const correctionTarget = currentRows.slice(0, -1).reverse().find((row) => row?.publishedAt) || currentRows.at(-2);
+const previous = currentRows.at(-2);
 const staleRate = Number((Number(correctionTarget.usdTryAskClose23) * 1.0007).toFixed(6));
 const staleUsdJpy = Number((Number(correctionTarget.usdJpyAskClose23) * 0.9993).toFixed(6));
-const datePlusDays = (isoDate, days) => {
-  const value = new Date(`${isoDate}T00:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-};
-const withdrawnDate = datePlusDays(latest.date, 7);
-const withdrawnRow = {
-  ...latest,
-  date: withdrawnDate,
-  publishedAt: latest.publishedAt || new Date().toISOString()
-};
 let liveFetchCount = 0;
 
-// The historical bootstrap is intentionally stale in three ways:
-// 1) latest publication is missing, 2) an already-known historical date has an
-// obsolete close, and 3) a withdrawn/misdated publication remains at a later date.
-// The live no-store feed must repair all three without a full user-data reset.
+// The historical bootstrap is intentionally stale in two ways:
+// 1) latest publication is missing, and 2) an already-known historical date has an
+// obsolete close. The live no-store feed must repair both without a full reload.
 await context.route(/\/data\/hirose-ask-close-23\.json\?rates=/, async (route) => {
   const response = await route.fetch();
   const data = await response.json();
@@ -53,8 +42,6 @@ await context.route(/\/data\/hirose-ask-close-23\.json\?rates=/, async (route) =
           ? { ...row, usdTryAskClose23: staleRate, usdJpyAskClose23: staleUsdJpy, publishedAt: '' }
           : row)
     : [];
-  history.push(withdrawnRow);
-  history.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   await route.fulfill({
     response,
     contentType: 'application/json',
@@ -84,47 +71,42 @@ try {
 
   assert.equal(
     await page.locator('html').getAttribute('data-hirose-rate-history-end'),
-    withdrawnDate,
-    `stale-session fixture did not retain withdrawn publication ${withdrawnDate} initially`
+    previous.date,
+    `stale-session fixture did not hide latest ${latest.date} publication initially`
   );
   assert.equal(await page.evaluate(() => localStorage.getItem('dollar-to-lira:rate-source:v1')), 'auto');
   assert.equal(await page.locator('html').getAttribute('data-live-rate-refresh-policy'), 'boot-focus-visible-2min-manual-full-reconcile');
 
-  // No manual API call here: boot refresh itself must add the missing latest date,
-  // overwrite the stale historical value, and remove the withdrawn/misdated date.
-  await page.waitForFunction(({ latest, correction, withdrawnDate }) => {
+  // No manual API call here: boot refresh itself must add the missing latest date and
+  // overwrite the stale value for the already-existing historical correction date.
+  await page.waitForFunction(({ latest, correction }) => {
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
     const latestRow = saved.daily?.find((item) => item.date === latest.date);
     const correctedRow = saved.daily?.find((item) => item.date === correction.date);
-    const withdrawnRow = saved.daily?.find((item) => item.date === withdrawnDate);
     return Number(document.documentElement.dataset.liveRateRefreshGeneration || 0) >= 1
       && latestRow?.rateSource === 'provider'
       && correctedRow?.rateSource === 'provider'
-      && !withdrawnRow
       && Math.abs(Number(latestRow.rate) - Number(latest.rate)) < 1e-10
       && Math.abs(Number(latestRow.usdJpy) - Number(latest.usdJpy)) < 1e-10
       && Math.abs(Number(correctedRow.rate) - Number(correction.rate)) < 1e-10
       && Math.abs(Number(correctedRow.usdJpy) - Number(correction.usdJpy)) < 1e-10;
   }, {
     latest: { date: latest.date, rate: latest.usdTryAskClose23, usdJpy: latest.usdJpyAskClose23 },
-    correction: { date: correctionTarget.date, rate: correctionTarget.usdTryAskClose23, usdJpy: correctionTarget.usdJpyAskClose23 },
-    withdrawnDate
+    correction: { date: correctionTarget.date, rate: correctionTarget.usdTryAskClose23, usdJpy: correctionTarget.usdJpyAskClose23 }
   }, { timeout: 10000 });
 
-  const live = await page.evaluate(({ latestDate, correctionDate, withdrawnDate }) => ({
+  const live = await page.evaluate(({ latestDate, correctionDate }) => ({
     mode: document.documentElement.dataset.rateSourceMode,
     service: document.documentElement.dataset.dailyDataMode,
     ready: document.documentElement.dataset.liveRateRefreshReady,
     end: document.documentElement.dataset.liveRateRefreshEnd,
     updated: Number(document.documentElement.dataset.liveRateRefreshUpdated || 0),
-    removed: Number(document.documentElement.dataset.liveRateRefreshRemoved || 0),
     generation: Number(document.documentElement.dataset.liveRateRefreshGeneration || 0),
     latest: window.__DTL_LIVE_HIROSE_RATE_AT__?.(latestDate) || null,
     corrected: window.__DTL_LIVE_HIROSE_RATE_AT__?.(correctionDate) || null,
     storedLatest: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === latestDate) || null,
-    storedCorrected: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === correctionDate) || null,
-    storedWithdrawn: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === withdrawnDate) || null
-  }), { latestDate: latest.date, correctionDate: correctionTarget.date, withdrawnDate });
+    storedCorrected: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === correctionDate) || null
+  }), { latestDate: latest.date, correctionDate: correctionTarget.date });
 
   assert.equal(live.mode, 'auto');
   assert.equal(live.service, 'provider-readonly');
@@ -137,9 +119,8 @@ try {
   assert.equal(live.storedCorrected?.rateSource, 'provider');
   assert.equal(live.storedCorrected?.rate, Number(correctionTarget.usdTryAskClose23));
   assert.equal(live.storedCorrected?.usdJpy, Number(correctionTarget.usdJpyAskClose23));
-  assert.equal(live.storedWithdrawn, null, 'withdrawn/misdated provider row survived boot reconciliation');
   assert.notEqual(live.storedCorrected?.rate, staleRate, 'historical stale rate survived boot reconciliation');
-  console.log(`automatic correction ${correctionTarget.date} + withdrawn ${withdrawnDate} + latest ${latest.date}: PASS`);
+  console.log(`automatic historical correction ${correctionTarget.date} + latest ${latest.date}: PASS`);
 
   await page.locator('[data-tab="daily"]').click();
   assert.equal(await page.locator('#dailyForm').isVisible(), false);
