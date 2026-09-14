@@ -140,6 +140,13 @@
     return { added, updated, removed };
   };
 
+  const syncRenderedState = () => {
+    try {
+      if (typeof window.__DTL_SYNC_PUBLISHED_DAILY__ === 'function') window.__DTL_SYNC_PUBLISHED_DAILY__();
+      else renderAll();
+    } catch (_) {}
+  };
+
   const publishState = (data, rows, result, reason) => {
     const finishedAt = new Date().toISOString();
     const sorted = [...rows].sort((a,b) => String(a.date).localeCompare(String(b.date)));
@@ -184,10 +191,7 @@
         lastRefreshAt = Date.now();
         installRateOverlay();
         const result = reconcilePublishedRows();
-        try {
-          if (typeof window.__DTL_SYNC_PUBLISHED_DAILY__ === 'function') window.__DTL_SYNC_PUBLISHED_DAILY__();
-          else renderAll();
-        } catch (_) {}
+        syncRenderedState();
         publishState(data, rows, result, reason);
         return { refreshed:true, records:rows.length, ...result };
       })
@@ -226,7 +230,21 @@
 
   const observer = new MutationObserver((mutations) => {
     if (!mutations.some((m) => m.attributeName === 'data-hirose-rate-history-ready')) return;
-    if (root.dataset.hiroseRateHistoryReady === '1') installRateOverlay();
+    if (root.dataset.hiroseRateHistoryReady !== '1') return;
+    installRateOverlay();
+
+    // The live request can win the startup race before the historical bootstrap has
+    // imported its cached/stale rows. Reconcile once more when that bootstrap reports
+    // ready so a withdrawn or moved publication cannot be reintroduced afterward.
+    if (liveByDate.size) {
+      const result = reconcilePublishedRows();
+      if (result.added || result.updated) {
+        root.dataset.liveRateRefreshAdded = String(Number(root.dataset.liveRateRefreshAdded || 0) + Number(result.added || 0));
+        root.dataset.liveRateRefreshUpdated = String(Number(root.dataset.liveRateRefreshUpdated || 0) + Number(result.updated || 0));
+        root.dataset.liveRateRefreshRemoved = String(Number(root.dataset.liveRateRefreshRemoved || 0) + Number(result.removed || 0));
+        syncRenderedState();
+      }
+    }
   });
   observer.observe(root, { attributes:true, attributeFilter:['data-hirose-rate-history-ready'] });
 
