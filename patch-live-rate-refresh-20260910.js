@@ -10,6 +10,8 @@
   const AUTO_REFRESH_MS = 2 * 60 * 1000;
   const LIFECYCLE_MIN_GAP_MS = 10000;
   let liveByDate = new Map();
+  let liveHistoryStart = '';
+  let liveHistoryEnd = '';
   let refreshPromise = null;
   let lastRefreshAt = 0;
   let baseRateAt = null;
@@ -42,6 +44,13 @@
   function authoritativeRateAt(date) {
     const live = liveRateAt(date);
     if (live) return live;
+
+    // Once a live primary feed has been loaded, absence inside its covered era is
+    // authoritative too. Do not fall back to a stale bootstrap row for a publication
+    // that was withdrawn or moved to another date. Older 4h backfill dates remain
+    // eligible for the historical fallback.
+    if (liveByDate.size && liveHistoryStart && String(date || '') >= liveHistoryStart) return null;
+
     try {
       const row = typeof baseRateAt === 'function' ? baseRateAt(date) : null;
       return row ? enrich(row, date) : null;
@@ -64,7 +73,7 @@
     if (!Array.isArray(state?.daily) || !liveByDate.size) return { added:0, updated:0, removed:0 };
     const byDate = new Map(state.daily.map((row) => [row?.date, row]).filter(([date]) => date));
     const liveDates = new Set(liveByDate.keys());
-    const liveEnd = [...liveDates].sort().at(-1) || '';
+    const liveEnd = liveHistoryEnd || [...liveDates].sort().at(-1) || '';
     let added = 0;
     let updated = 0;
     let removed = 0;
@@ -155,7 +164,8 @@
       || '';
     root.dataset.liveRateRefreshReady = '1';
     root.dataset.liveRateRefreshRecords = String(rows.length);
-    root.dataset.liveRateRefreshEnd = sorted.at(-1)?.date || '';
+    root.dataset.liveRateRefreshStart = liveHistoryStart;
+    root.dataset.liveRateRefreshEnd = liveHistoryEnd;
     root.dataset.liveRateRefreshAdded = String(result.added || 0);
     root.dataset.liveRateRefreshUpdated = String(result.updated || 0);
     root.dataset.liveRateRefreshRemoved = String(result.removed || 0);
@@ -165,7 +175,7 @@
     root.dataset.liveRateRefreshGeneration = String(Number(root.dataset.liveRateRefreshGeneration || 0) + 1);
     delete root.dataset.liveRateRefreshError;
     window.dispatchEvent(new CustomEvent('dtl:provider-rates-refreshed', {
-      detail:{ ...result, records:rows.length, end:sorted.at(-1)?.date || '', publication, finishedAt, reason }
+      detail:{ ...result, records:rows.length, start:liveHistoryStart, end:liveHistoryEnd, publication, finishedAt, reason }
     }));
   };
 
@@ -187,6 +197,9 @@
         const rows = Array.isArray(data?.history)
           ? data.history.filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
           : [];
+        const sortedRows = [...rows].sort((a,b) => String(a.date).localeCompare(String(b.date)));
+        liveHistoryStart = String(data?.historyStart || sortedRows.at(0)?.date || '');
+        liveHistoryEnd = String(data?.historyEnd || sortedRows.at(-1)?.date || '');
         liveByDate = new Map(rows.map((row) => [row.date, { ...row }]));
         lastRefreshAt = Date.now();
         installRateOverlay();
