@@ -1,6 +1,6 @@
 // Keep published Hirose ASK rates fresh in long-lived tabs/PWAs.
 // The live no-store feed is authoritative for every published date, including
-// historical corrections to dates that already exist in localStorage.
+// historical corrections, date moves, and withdrawals of previously-published rows.
 (() => {
   const root = document.documentElement;
   if (root.dataset.liveRateRefresh === '1') return;
@@ -61,10 +61,28 @@
   const same = (a, b) => Math.abs(Number(a || 0) - Number(b || 0)) < 1e-10;
 
   const reconcilePublishedRows = () => {
-    if (!Array.isArray(state?.daily) || !liveByDate.size) return { added:0, updated:0 };
+    if (!Array.isArray(state?.daily) || !liveByDate.size) return { added:0, updated:0, removed:0 };
     const byDate = new Map(state.daily.map((row) => [row?.date, row]).filter(([date]) => date));
+    const liveDates = new Set(liveByDate.keys());
+    const liveEnd = [...liveDates].sort().at(-1) || '';
     let added = 0;
     let updated = 0;
+    let removed = 0;
+
+    // A publish correction may move a row to a different date. Remove the old local
+    // provider row when it is no longer present in the authoritative live feed.
+    // Historical CSV/backfill rows without publication metadata are preserved. The
+    // extra hirose-ask-23close rule only removes a stale bootstrap row newer than the
+    // current feed end, covering clients that closed before provider normalization.
+    [...byDate.entries()].forEach(([date, row]) => {
+      if (liveDates.has(date)) return;
+      const withdrawnPublication = row?.rateSource === 'provider' && !!row?.rateSourcePublishedAt;
+      const staleBootstrapTail = row?.rateSource === 'hirose-ask-23close' && liveEnd && date > liveEnd;
+      if (!withdrawnPublication && !staleBootstrapTail) return;
+      byDate.delete(date);
+      updated += 1;
+      removed += 1;
+    });
 
     [...liveByDate.values()].sort((a,b) => String(a.date).localeCompare(String(b.date))).forEach((raw) => {
       const source = enrich(raw, raw?.date) || raw;
@@ -119,7 +137,7 @@
       try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
       try { window.__DTL_BACKEND_INVALIDATE__?.(); } catch (_) {}
     }
-    return { added, updated };
+    return { added, updated, removed };
   };
 
   const publishState = (data, rows, result, reason) => {
@@ -133,6 +151,7 @@
     root.dataset.liveRateRefreshEnd = sorted.at(-1)?.date || '';
     root.dataset.liveRateRefreshAdded = String(result.added || 0);
     root.dataset.liveRateRefreshUpdated = String(result.updated || 0);
+    root.dataset.liveRateRefreshRemoved = String(result.removed || 0);
     root.dataset.liveRateRefreshLastAt = finishedAt;
     root.dataset.liveRateRefreshPublication = publication;
     root.dataset.liveRateRefreshReason = reason || 'auto';
@@ -147,7 +166,7 @@
     const now = Date.now();
     if (!force && now - lastRefreshAt < 1500 && liveByDate.size) {
       installRateOverlay();
-      return Promise.resolve({ refreshed:false, records:liveByDate.size, added:0, updated:0 });
+      return Promise.resolve({ refreshed:false, records:liveByDate.size, added:0, updated:0, removed:0 });
     }
     if (refreshPromise) return refreshPromise;
 
