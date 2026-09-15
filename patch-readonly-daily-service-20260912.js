@@ -109,19 +109,38 @@
     return ['provider', 'reference-bulk', 'hirose-ask-23close'].includes(source) ? '配信' : '旧履歴';
   };
 
+  // Swap source data contains fractional yen. Do not pass it through the ordinary
+  // money() formatter because that intentionally rounds portfolio PnL to whole yen.
+  const swapAmountFmt = (value) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '—';
+    const sign = amount < 0 ? '-' : '';
+    const digits = Math.abs(amount).toLocaleString('ja-JP', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8,
+      useGrouping: true
+    });
+    return `${sign}¥${digits}`;
+  };
+
+  const swapDaysHtml = (value) => {
+    const days = Number(value || 0);
+    if (!(days > 0)) return '<span class="swap-days-none">—</span>';
+    const label = days > 1 ? `${days}日分` : '1日';
+    return `<span class="swap-days-badge${days > 1 ? ' multiple' : ''}">${label}</span>`;
+  };
+
   renderDailyTable = function() {
     const body = document.getElementById('dailyTableBody');
     if (!body) return;
     const rows = [...(derivedDaily() || [])].reverse();
     const head = body.closest('table')?.querySelector('thead');
-    if (head) head.innerHTML = '<tr><th>日付</th><th>USD/TRY</th><th>USD/JPY</th><th>TRY/JPY</th><th>Swap/lot</th><th>保有lot</th><th>FX損益</th><th>累積Swap</th><th>総損益</th><th>日次損益</th><th>Source</th></tr>';
+    if (head) head.innerHTML = '<tr><th>日付</th><th>USD/TRY</th><th>USD/JPY</th><th>TRY/JPY</th><th>付与日数</th><th>Swap/lot</th><th>保有lot</th><th>FX損益</th><th>累積Swap</th><th>総損益</th><th>日次損益</th><th>Source</th></tr>';
     body.innerHTML = rows.length ? rows.map((row) => {
       const usdJpy = usdJpyFor(row);
-      const days = Number(row.swapSourceDays || 0);
-      const swapText = `${money(Number(row.swapPerLot || 0))}${days > 1 ? `<small class="swap-days-badge">${days}日分</small>` : ''}`;
       const source = sourceLabel(row);
-      return `<tr data-daily-readonly="1"><td>${row.date}</td><td>${rateFmt(row.rate)}</td><td>${usdJpy > 0 ? num(usdJpy, 3) : '—'}</td><td>${rateFmt(row.tryJpy)}</td><td>${swapText}</td><td>${num(row.lots,2)}</td><td class="${row.fxPnl>=0?'positive-text':'negative-text'}">${money(row.fxPnl)}</td><td class="${row.swap>=0?'positive-text':'negative-text'}">${money(row.swap)}</td><td class="${row.total>=0?'positive-text':'negative-text'}">${money(row.total)}</td><td class="${row.dailyPnl>=0?'positive-text':'negative-text'}">${money(row.dailyPnl)}</td><td><span class="daily-source-badge ${source==='配信'?'provider':'legacy'}">${source}</span></td></tr>`;
-    }).join('') : '<tr><td colspan="11" style="text-align:center;color:#596373;padding:36px">配信済みの日次データがありません</td></tr>';
+      return `<tr data-daily-readonly="1"><td>${row.date}</td><td>${rateFmt(row.rate)}</td><td>${usdJpy > 0 ? num(usdJpy, 3) : '—'}</td><td>${rateFmt(row.tryJpy)}</td><td class="swap-days-cell">${swapDaysHtml(row.swapSourceDays)}</td><td class="swap-amount-cell">${swapAmountFmt(row.swapPerLot)}</td><td>${num(row.lots,2)}</td><td class="${row.fxPnl>=0?'positive-text':'negative-text'}">${money(row.fxPnl)}</td><td class="${row.swap>=0?'positive-text':'negative-text'}">${money(row.swap)}</td><td class="${row.total>=0?'positive-text':'negative-text'}">${money(row.total)}</td><td class="${row.dailyPnl>=0?'positive-text':'negative-text'}">${money(row.dailyPnl)}</td><td><span class="daily-source-badge ${source==='配信'?'provider':'legacy'}">${source}</span></td></tr>`;
+    }).join('') : '<tr><td colspan="12" style="text-align:center;color:#596373;padding:36px">配信済みの日次データがありません</td></tr>';
   };
 
   const forceHide = (element) => {
@@ -217,7 +236,7 @@
           <div><span>USD/TRY</span><strong>${rateFmt(row.rate)}</strong></div>
           <div><span>USD/JPY</span><strong>${usdJpy > 0 ? num(usdJpy,3) : '—'}</strong></div>
           <div><span>TRY/JPY</span><strong>${rateFmt(row.tryJpy)}</strong></div>
-          <div><span>Swap / lot</span><strong>${money(Number(row.swapPerLot || 0))}</strong></div>
+          <div><span>Swap / lot</span><strong>${swapAmountFmt(row.swapPerLot)}</strong></div>
         </div>`;
     })();
     if (card.innerHTML !== html) card.innerHTML = html;
@@ -258,6 +277,11 @@
     .readonly-daily-grid>div{border:1px solid var(--line);background:#0a0d12;border-radius:10px;padding:9px 10px;min-width:0}
     .readonly-daily-grid span{display:block;font-size:7px;color:var(--muted2);font-weight:800;letter-spacing:.06em;margin-bottom:4px}
     .readonly-daily-grid strong{font-size:12px;white-space:nowrap}
+    #view-daily .swap-days-cell{text-align:center;white-space:nowrap}
+    #view-daily .swap-days-badge{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:999px;padding:2px 6px;color:var(--muted2);font-size:8px;font-weight:800;white-space:nowrap}
+    #view-daily .swap-days-badge.multiple{color:var(--accent)}
+    #view-daily .swap-days-none{color:var(--muted2)}
+    #view-daily .swap-amount-cell{font-variant-numeric:tabular-nums;white-space:nowrap}
     .daily-source-badge{display:inline-flex;border-radius:999px;padding:3px 7px;font-size:7px;font-weight:850;letter-spacing:.05em;border:1px solid var(--line)}
     .daily-source-badge.provider{color:var(--accent)}
     .daily-source-badge.legacy{color:var(--muted2)}
