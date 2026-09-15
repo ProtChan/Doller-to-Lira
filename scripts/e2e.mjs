@@ -101,6 +101,28 @@ try {
   assert.equal(await page.locator('#dailyTableBody [data-delete-daily]').count(), 0, 'read-only daily rows must have no delete action');
   assert.ok(await page.locator('#dailyTableBody tr[data-daily-readonly="1"]').count() > 0, 'read-only daily table is empty');
 
+  const swapDisplay = await page.evaluate(() => {
+    const headers = [...document.querySelectorAll('#view-daily thead th')].map((th) => th.textContent?.trim() || '');
+    const sample = (typeof derivedDaily === 'function' ? derivedDaily() : [])
+      .find((row) => Number(row?.swapSourceDays || 0) > 1 && !Number.isInteger(Number(row?.swapPerLot || 0))) || null;
+    if (!sample) return { headers, sample:null };
+    const tr = [...document.querySelectorAll('#dailyTableBody tr[data-daily-readonly="1"]')]
+      .find((row) => row.cells?.[0]?.textContent?.trim() === sample.date) || null;
+    return {
+      headers,
+      sample:{ date:sample.date, days:Number(sample.swapSourceDays), amount:Number(sample.swapPerLot) },
+      daysText:tr?.querySelector('.swap-days-cell')?.textContent?.trim() || '',
+      amountText:tr?.querySelector('.swap-amount-cell')?.textContent?.trim() || ''
+    };
+  });
+  assert.ok(swapDisplay.headers.includes('付与日数'), 'Daily Data must expose a dedicated grant-days column');
+  assert.ok(swapDisplay.headers.indexOf('付与日数') < swapDisplay.headers.indexOf('Swap/lot'), 'grant days should be separated before Swap/lot');
+  assert.ok(swapDisplay.sample, 'no fractional multi-day swap row available for display regression');
+  assert.equal(swapDisplay.daysText, `${swapDisplay.sample.days}日分`, 'multi-day grant count must be isolated from the swap amount');
+  assert.match(swapDisplay.amountText, /\.\d+/, 'Swap/lot must preserve fractional yen instead of whole-yen rounding');
+  assert.ok(!swapDisplay.amountText.includes('日分'), 'grant-day text leaked into swap amount cell');
+  console.log('Daily Data precise Swap/lot + separate grant-days column: PASS');
+
   const serviceRow = await page.evaluate((date) => {
     const source = window.__DTL_HIROSE_RATE_AT__?.(date) || null;
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === date) || null;
