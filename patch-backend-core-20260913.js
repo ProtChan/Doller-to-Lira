@@ -59,6 +59,9 @@
     root.dataset.hiroseHistoryEnd || '',
     root.dataset.hiroseHistoryRecords || '',
     root.dataset.hiroseRateHistoryEnd || '',
+    root.dataset.hiroseMarginReady || '',
+    root.dataset.hiroseMarginOfficialThrough || '',
+    root.dataset.hiroseMarginRecords || '',
     root.dataset.liveRateRefreshEnd || '',
     root.dataset.capitalHistoryAccounting || ''
   ].join('|');
@@ -79,6 +82,13 @@
       const dailySwap = typeof window.__DTL_HIROSE_DAILY_SWAP_ENTITLED__ === 'function'
         ? Number(window.__DTL_HIROSE_DAILY_SWAP_ENTITLED__(saved.date) || 0)
         : swap - previousSwap;
+      const marginInfo = typeof window.__DTL_MARGIN_RESOLUTION__ === 'function'
+        ? window.__DTL_MARGIN_RESOLUTION__(saved.date, usdJpy)
+        : {
+            per1000:Number(window.__DTL_MARGIN_PER_1000__?.(usdJpy) || 0),
+            source:'rate-estimate', status:'estimate', official:false,
+            reference:'', referenceDate:'', basisUsdJpy:usdJpy
+          };
       const row = {
         ...saved,
         ...swapFields(saved.date),
@@ -93,7 +103,13 @@
         dailyPnl:total - previousTotal,
         lots:grossLotsOn(saved.date),
         signedLots:signedLotsOn(saved.date),
-        marginPer1000:window.__DTL_MARGIN_PER_1000__?.(usdJpy)
+        marginPer1000:Number(marginInfo?.per1000 || 0),
+        marginSource:marginInfo?.source || 'rate-estimate',
+        marginStatus:marginInfo?.status || 'estimate',
+        marginOfficial:marginInfo?.official === true,
+        marginReference:marginInfo?.reference || '',
+        marginReferenceDate:marginInfo?.referenceDate || '',
+        marginBasisUsdJpy:Number(marginInfo?.basisUsdJpy || 0) || undefined
       };
       try { row.margin = marginRequired(saved.date, rate, tryJpy); } catch (_) { row.margin = 0; }
       try { row.maintenance = maintenance(saved.date, rate, tryJpy); } catch (_) { row.maintenance = Infinity; }
@@ -126,6 +142,9 @@
       'data-hirose-history-ready',
       'data-hirose-feed-ready',
       'data-hirose-rate-history-ready',
+      'data-hirose-margin-ready',
+      'data-hirose-margin-official-through',
+      'data-hirose-margin-records',
       'data-live-rate-refresh-ready',
       'data-capital-history-accounting'
     ].includes(mutation.attributeName));
@@ -136,6 +155,7 @@
     attributes:true,
     attributeFilter:[
       'data-hirose-history-ready','data-hirose-feed-ready','data-hirose-rate-history-ready',
+      'data-hirose-margin-ready','data-hirose-margin-official-through','data-hirose-margin-records',
       'data-live-rate-refresh-ready','data-capital-history-accounting'
     ]
   });
