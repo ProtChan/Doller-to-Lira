@@ -23,13 +23,27 @@ for (const retired of RETIRED_RUNTIME_FILES) {
 
 for (const file of [...SOURCE_FILES, ...RETIRED_RUNTIME_FILES]) await fs.access(path.join(root, file));
 
-const [index, bundle, sw, metaText] = await Promise.all([
+const [index, bundle, sw, metaText, marginText] = await Promise.all([
   fs.readFile(path.join(out, 'index.html'), 'utf8'),
   fs.readFile(path.join(out, 'app.bundle.js'), 'utf8'),
   fs.readFile(path.join(out, 'sw.js'), 'utf8'),
-  fs.readFile(path.join(out, 'build-meta.json'), 'utf8')
+  fs.readFile(path.join(out, 'build-meta.json'), 'utf8'),
+  fs.readFile(path.join(root, 'data', 'hirose-usdtry-margin.json'), 'utf8')
 ]);
 const meta = JSON.parse(metaText);
+const marginFeed = JSON.parse(marginText);
+assert.equal(marginFeed.policy, 'official-history-rate-estimate-future', 'Hirose margin feed policy mismatch');
+assert.equal(marginFeed.unit, 1000, 'Hirose margin feed must be quoted per 1,000 USD');
+assert.ok(Array.isArray(marginFeed.history) && marginFeed.history.length > 0, 'Hirose official margin history is empty');
+const marginDates = marginFeed.history.map((row) => String(row.date || ''));
+assert.equal(marginFeed.officialThrough, marginDates.at(-1), 'officialThrough must match the latest official margin date');
+assert.equal(new Set(marginDates).size, marginDates.length, 'official margin history contains duplicate dates');
+for (const row of marginFeed.history) {
+  assert.match(String(row.date || ''), /^\d{4}-\d{2}-\d{2}$/, 'official margin row has invalid date');
+  assert.ok(Number(row.marginPer1000Jpy) > 0, `official margin missing for ${row.date}`);
+  assert.equal(row.verification, 'hirose-official', `margin row is not marked official: ${row.date}`);
+  assert.match(String(row.reference || ''), /^https:\/\/hirose-fx\.jp\/pdf\/deposit\//, `official margin reference missing: ${row.date}`);
+}
 
 assert.match(index, new RegExp(`app\\.bundle\\.js\\?v=${BUILD}`), 'production index does not load the built bundle');
 assert.doesNotMatch(index, /runtime-[0-9-]+\.js/, 'production index still loads a legacy runtime');
@@ -44,6 +58,10 @@ for (const asset of ['styles.css', 'pwa-mobile-20260906.css', 'manifest.webmanif
 
 assert.match(bundle, /backendArchitecture = 'single-bundle'/, 'single-bundle marker missing');
 assert.match(bundle, /dataset\.hiroseCore = '1'/, 'unified Hirose core marker missing');
+assert.match(bundle, /hiroseMarginMode = 'official-history-estimated-future'/, 'official-history/future-estimate margin policy missing');
+assert.match(bundle, /__DTL_MARGIN_RESOLUTION__/, 'date-aware Hirose margin resolution API missing');
+assert.match(bundle, /__DTL_MARGIN_ESTIMATE_PER_1000__/, 'future margin estimate API missing');
+assert.match(bundle, /MARGIN_FEED_URL = '.\/data\/hirose-usdtry-margin\.json'/, 'official Hirose margin feed is not wired into runtime');
 assert.match(bundle, /backendCoreVersion = '20260913-provider-core'/, 'provider backend marker missing');
 assert.match(bundle, /architecture:'provider-readonly-core'/, 'provider backend stats marker missing');
 assert.match(bundle, /dataset\.positionEditCore = '1'/, 'position-edit core marker missing');
