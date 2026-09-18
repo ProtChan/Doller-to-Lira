@@ -24,6 +24,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Probe Hirose official USDTRY margins
+        run: |
+          python3 -m pip install --quiet pypdf
+          python3 - <<'PY'
+          import io, json, re, urllib.request
+          from pypdf import PdfReader
+          from pathlib import Path
+
+          data = json.loads(Path('data/hirose-usdtry-margin.json').read_text())
+          dates = [row['date'] for row in data.get('history', [])]
+          out = {}
+          for date in dates:
+              ymd = date.replace('-', '')
+              url = f'https://hirose-fx.jp/pdf/deposit/{ymd}/lionfx.pdf'
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as r:
+                      raw = r.read()
+                  text = '\n'.join((p.extract_text() or '') for p in PdfReader(io.BytesIO(raw)).pages)
+                  flat = re.sub(r'[ \\t]+', ' ', text)
+                  m = re.search(r'USD/TRY\\s+1,000(?:通貨)?\\s+([0-9,]+)\\s*円', flat, re.S)
+                  if not m:
+                      i = flat.find('USD/TRY')
+                      print('NO_MATCH', date, repr(flat[max(0,i-80):i+180] if i >= 0 else flat[:300]))
+                      continue
+                  out[date] = int(m.group(1).replace(',', ''))
+                  print('MARGIN', date, out[date])
+              except Exception as e:
+                  print('ERROR', date, type(e).__name__, str(e))
+          print('MARGIN_JSON=' + json.dumps(out, ensure_ascii=False, sort_keys=True))
+          PY
+
       - name: Validate source and publisher logic
         run: |
           set -euo pipefail
