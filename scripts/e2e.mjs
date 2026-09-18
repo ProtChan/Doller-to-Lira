@@ -29,6 +29,7 @@ try {
   for (const [key, value] of Object.entries({
     appReady: '1',
     hiroseMargin: '1',
+    hiroseMarginReady: '1',
     hiroseFeedReady: '1',
     hiroseHistoryReady: '1',
     backendCore: '1',
@@ -66,15 +67,74 @@ try {
   });
   console.log('legacy manual modes -> provider service modes: PASS');
 
-  const marginBands = await page.evaluate(() => ({
-    at155: window.__DTL_MARGIN_PER_1000__(155),
-    below1575: window.__DTL_MARGIN_PER_1000__(157.4999),
-    at1575: window.__DTL_MARGIN_PER_1000__(157.5),
-    below160: window.__DTL_MARGIN_PER_1000__(159.9999),
-    at160: window.__DTL_MARGIN_PER_1000__(160)
-  }));
-  assert.deepEqual(marginBands, { at155: 6300, below1575: 6300, at1575: 6400, below160: 6400, at160: 6500 });
-  console.log('Hirose USDJPY margin boundary rules: PASS');
+  const marginModel = await page.evaluate(() => {
+    const history = (window.__DTL_HIROSE_MARGIN_HISTORY__?.() || [])
+      .filter((row) => row?.date && Number(row.marginPer1000Jpy) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const official = history.at(-1) || null;
+    const officialResolution = official
+      ? window.__DTL_MARGIN_RESOLUTION__?.(official.date, 999)
+      : null;
+    const officialDerived = official && typeof derivedDaily === 'function'
+      ? derivedDaily().find((row) => row.date === official.date) || null
+      : null;
+
+    const addBusinessDay = (date) => {
+      const value = new Date(`${date}T12:00:00Z`);
+      do value.setUTCDate(value.getUTCDate() + 1);
+      while (value.getUTCDay() === 0 || value.getUTCDay() === 6);
+      return value.toISOString().slice(0, 10);
+    };
+    const futureDate = official ? addBusinessDay(official.date) : '';
+    const futureResolution = futureDate
+      ? window.__DTL_MARGIN_RESOLUTION__?.(futureDate, 157.5)
+      : null;
+
+    return {
+      mode:document.documentElement.dataset.hiroseMarginMode,
+      officialThrough:document.documentElement.dataset.hiroseMarginOfficialThrough,
+      records:Number(document.documentElement.dataset.hiroseMarginRecords || 0),
+      history,
+      official,
+      officialResolution,
+      officialDerived:officialDerived ? {
+        date:officialDerived.date,
+        marginPer1000:officialDerived.marginPer1000,
+        marginOfficial:officialDerived.marginOfficial,
+        marginSource:officialDerived.marginSource,
+        marginReference:officialDerived.marginReference
+      } : null,
+      futureDate,
+      futureResolution,
+      estimate1575:window.__DTL_MARGIN_ESTIMATE_PER_1000__?.(157.5),
+      estimate1599999:window.__DTL_MARGIN_ESTIMATE_PER_1000__?.(159.9999),
+      estimate160:window.__DTL_MARGIN_ESTIMATE_PER_1000__?.(160)
+    };
+  });
+  assert.equal(marginModel.mode, 'official-history-estimated-future');
+  assert.ok(marginModel.history.length > 0 && marginModel.records === marginModel.history.length, 'official Hirose margin history missing');
+  assert.equal(marginModel.officialThrough, marginModel.official.date);
+  assert.equal(marginModel.officialResolution?.official, true);
+  assert.equal(marginModel.officialResolution?.source, 'hirose-official');
+  assert.equal(Number(marginModel.officialResolution?.per1000), Number(marginModel.official.marginPer1000Jpy));
+  assert.equal(marginModel.officialDerived?.marginOfficial, true);
+  assert.equal(marginModel.officialDerived?.marginSource, 'hirose-official');
+  assert.equal(Number(marginModel.officialDerived?.marginPer1000), Number(marginModel.official.marginPer1000Jpy));
+  assert.equal(marginModel.officialDerived?.marginReference, marginModel.official.reference);
+  assert.equal(marginModel.futureResolution?.official, false);
+  assert.equal(marginModel.futureResolution?.source, 'rate-estimate');
+  assert.ok(Number(marginModel.futureResolution?.per1000) > 0, 'future margin estimate missing');
+  const futureBasis = Number(marginModel.futureResolution?.basisUsdJpy || 0);
+  assert.ok(futureBasis > 0, 'future margin estimate has no USDJPY basis');
+  assert.equal(
+    Number(marginModel.futureResolution?.per1000),
+    Math.ceil(((futureBasis * 1000 * 0.04) - 1e-8) / 100) * 100,
+    'future margin estimate formula mismatch'
+  );
+  assert.equal(marginModel.estimate1575, 6300, 'exact 4%/JPY100 boundary must not over-round');
+  assert.equal(marginModel.estimate1599999, 6400);
+  assert.equal(marginModel.estimate160, 6400);
+  console.log('Hirose official historical margin + future rate estimate: PASS');
 
   const manifestResponse = await page.request.get(new URL('manifest.webmanifest', targetUrl).href);
   assert.equal(manifestResponse.ok(), true);
