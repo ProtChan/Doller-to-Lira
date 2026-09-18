@@ -32,7 +32,11 @@ const [index, bundle, sw, metaText, marginText] = await Promise.all([
 ]);
 const meta = JSON.parse(metaText);
 const marginFeed = JSON.parse(marginText);
-assert.equal(marginFeed.policy, 'official-history-rate-estimate-future', 'Hirose margin feed policy mismatch');
+assert.equal(marginFeed.policy, 'official-history-manual-promotion-rate-estimate-future', 'Hirose margin feed policy mismatch');
+assert.equal(marginFeed.officialUpdatePolicy, 'manual-on-user-instruction', 'official margin rows must only be promoted on explicit user instruction');
+assert.equal(marginFeed.ruleEffectiveFrom, '2026-07-01', 'USDTRY 4% margin rule effective date mismatch');
+assert.match(String(marginFeed.ruleReference || ''), /^https:\/\/hirose-fx\.co\.jp\/contents\/news\/HeView/, 'Hirose margin rule reference missing');
+assert.match(String(marginFeed.estimateRule || ''), /4%.*100/, 'future margin estimate rule metadata missing');
 assert.equal(marginFeed.unit, 1000, 'Hirose margin feed must be quoted per 1,000 USD');
 assert.ok(Array.isArray(marginFeed.history) && marginFeed.history.length > 0, 'Hirose official margin history is empty');
 const marginDates = marginFeed.history.map((row) => String(row.date || ''));
