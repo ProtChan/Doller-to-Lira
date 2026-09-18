@@ -2,58 +2,312 @@
   "source": "Hirose LION FX official required margin announcements",
   "pair": "USD/TRY",
   "unit": 1000,
-  "policy": "official-history-rate-estimate-future",
+  "policy": "official-history-manual-promotion-rate-estimate-future",
   "officialThrough": "2026-09-17",
   "history": [
-    {"date":"2026-07-10","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260710/lionfx.pdf"},
-    {"date":"2026-07-13","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260713/lionfx.pdf"},
-    {"date":"2026-07-14","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260714/lionfx.pdf"},
-    {"date":"2026-07-15","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260715/lionfx.pdf"},
-    {"date":"2026-07-16","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260716/lionfx.pdf"},
-    {"date":"2026-07-17","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260717/lionfx.pdf"},
-    {"date":"2026-07-20","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260720/lionfx.pdf"},
-    {"date":"2026-07-21","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260721/lionfx.pdf"},
-    {"date":"2026-07-22","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260722/lionfx.pdf"},
-    {"date":"2026-07-23","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260723/lionfx.pdf"},
-    {"date":"2026-07-24","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260724/lionfx.pdf"},
-    {"date":"2026-07-27","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260727/lionfx.pdf"},
-    {"date":"2026-07-28","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260728/lionfx.pdf"},
-    {"date":"2026-07-29","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260729/lionfx.pdf"},
-    {"date":"2026-07-30","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260730/lionfx.pdf"},
-    {"date":"2026-07-31","marginPer1000Jpy":6600,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260731/lionfx.pdf"},
-    {"date":"2026-08-03","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260803/lionfx.pdf"},
-    {"date":"2026-08-04","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260804/lionfx.pdf"},
-    {"date":"2026-08-05","marginPer1000Jpy":6300,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260805/lionfx.pdf"},
-    {"date":"2026-08-06","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260806/lionfx.pdf"},
-    {"date":"2026-08-07","marginPer1000Jpy":6300,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260807/lionfx.pdf"},
-    {"date":"2026-08-10","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260810/lionfx.pdf"},
-    {"date":"2026-08-11","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260811/lionfx.pdf"},
-    {"date":"2026-08-12","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260812/lionfx.pdf"},
-    {"date":"2026-08-13","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260813/lionfx.pdf"},
-    {"date":"2026-08-14","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260814/lionfx.pdf"},
-    {"date":"2026-08-17","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260817/lionfx.pdf"},
-    {"date":"2026-08-18","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260818/lionfx.pdf"},
-    {"date":"2026-08-19","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260819/lionfx.pdf"},
-    {"date":"2026-08-20","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260820/lionfx.pdf"},
-    {"date":"2026-08-21","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260821/lionfx.pdf"},
-    {"date":"2026-08-24","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260824/lionfx.pdf"},
-    {"date":"2026-08-25","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260825/lionfx.pdf"},
-    {"date":"2026-08-26","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260826/lionfx.pdf"},
-    {"date":"2026-08-27","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260827/lionfx.pdf"},
-    {"date":"2026-08-28","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260828/lionfx.pdf"},
-    {"date":"2026-08-31","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260831/lionfx.pdf"},
-    {"date":"2026-09-01","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260901/lionfx.pdf"},
-    {"date":"2026-09-02","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260902/lionfx.pdf"},
-    {"date":"2026-09-03","marginPer1000Jpy":6500,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260903/lionfx.pdf"},
-    {"date":"2026-09-04","marginPer1000Jpy":6400,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260904/lionfx.pdf"},
-    {"date":"2026-09-07","marginPer1000Jpy":6300,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260907/lionfx.pdf"},
-    {"date":"2026-09-08","marginPer1000Jpy":6300,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260908/lionfx.pdf"},
-    {"date":"2026-09-09","marginPer1000Jpy":6200,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260909/lionfx.pdf"},
-    {"date":"2026-09-10","marginPer1000Jpy":6200,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260910/lionfx.pdf"},
-    {"date":"2026-09-11","marginPer1000Jpy":6200,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260911/lionfx.pdf"},
-    {"date":"2026-09-14","marginPer1000Jpy":6200,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260914/lionfx.pdf"},
-    {"date":"2026-09-15","marginPer1000Jpy":6200,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260915/lionfx.pdf"},
-    {"date":"2026-09-16","marginPer1000Jpy":6200,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260916/lionfx.pdf"},
-    {"date":"2026-09-17","marginPer1000Jpy":6300,"verification":"hirose-official","reference":"https://hirose-fx.jp/pdf/deposit/20260917/lionfx.pdf"}
-  ]
+    {
+      "date": "2026-07-10",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260710/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-13",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260713/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-14",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260714/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-15",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260715/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-16",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260716/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-17",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260717/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-20",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260720/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-21",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260721/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-22",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260722/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-23",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260723/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-24",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260724/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-27",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260727/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-28",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260728/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-29",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260729/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-30",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260730/lionfx.pdf"
+    },
+    {
+      "date": "2026-07-31",
+      "marginPer1000Jpy": 6600,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260731/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-03",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260803/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-04",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260804/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-05",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260805/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-06",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260806/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-07",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260807/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-10",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260810/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-11",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260811/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-12",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260812/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-13",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260813/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-14",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260814/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-17",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260817/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-18",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260818/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-19",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260819/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-20",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260820/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-21",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260821/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-24",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260824/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-25",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260825/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-26",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260826/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-27",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260827/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-28",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260828/lionfx.pdf"
+    },
+    {
+      "date": "2026-08-31",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260831/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-01",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260901/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-02",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260902/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-03",
+      "marginPer1000Jpy": 6500,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260903/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-04",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260904/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-07",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260907/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-08",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260908/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-09",
+      "marginPer1000Jpy": 6200,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260909/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-10",
+      "marginPer1000Jpy": 6200,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260910/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-11",
+      "marginPer1000Jpy": 6200,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260911/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-14",
+      "marginPer1000Jpy": 6200,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260914/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-15",
+      "marginPer1000Jpy": 6200,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260915/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-16",
+      "marginPer1000Jpy": 6200,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260916/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-17",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260917/lionfx.pdf"
+    }
+  ],
+  "ruleEffectiveFrom": "2026-07-01",
+  "estimateRule": "previous-business-day USD/JPY basis x 1,000 currency x 4%, round up to JPY 100",
+  "ruleReference": "https://hirose-fx.co.jp/contents/news/HeView?hrsCrpNo=190916",
+  "officialUpdatePolicy": "manual-on-user-instruction"
 }
