@@ -7,8 +7,8 @@
   "description": "Historical Hirose ASK CSV plus owner-verified daily publication. usdTryAskDayHigh is the intraday maximum ASK used as the adverse short-position reference.",
   "generatedFromUpload": "USDTRY_60分足_ASK_202609072255.zip",
   "historyStart": "2026-07-10",
-  "historyEnd": "2026-09-21",
-  "records": 52,
+  "historyEnd": "2026-09-22",
+  "records": 53,
   "history": [
     {
       "date": "2026-07-10",
@@ -305,7 +305,15 @@
       "usdTryAskDayHigh": 48.8632,
       "verification": "owner-manual",
       "publishedAt": "2026-09-21T15:40:09Z"
+    },
+    {
+      "date": "2026-09-22",
+      "usdTryAskClose23": 48.8213,
+      "usdJpyAskClose23": 157.276,
+      "usdTryAskDayHigh": 48.9005,
+      "verification": "owner-manual",
+      "publishedAt": "2026-09-22T15:08:09Z"
     }
   ],
-  "lastManualPublication": "2026-09-21T15:40:09Z"
+  "lastManualPublication": "2026-09-22T15:08:09Z"
 }
