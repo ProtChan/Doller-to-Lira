@@ -13,20 +13,32 @@ jobs:
           import io, re, urllib.request
           from pypdf import PdfReader
           dates = ['2026-09-18','2026-09-21','2026-09-22','2026-09-23','2026-09-24']
+          headers = {
+              'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36',
+              'Accept':'application/pdf,*/*',
+              'Referer':'https://hirose-fx.co.jp/'
+          }
           for date in dates:
               ymd = date.replace('-','')
-              url = f'https://hirose-fx.jp/pdf/deposit/{ymd}/lionfx.pdf'
-              try:
-                  with urllib.request.urlopen(url, timeout=30) as r:
-                      raw = r.read()
-                  text = '\n'.join((p.extract_text() or '') for p in PdfReader(io.BytesIO(raw)).pages)
-                  flat = re.sub(r'[ \t]+', ' ', text)
-                  m = re.search(r'USD/TRY\s+1,000(?:通貨)?\s+([0-9,]+)\s*円', flat, re.S)
-                  if not m:
-                      i = flat.find('USD/TRY')
-                      print('NO_MATCH', date, repr(flat[max(0,i-80):i+180] if i >= 0 else flat[:300]))
-                  else:
+              found = False
+              for host in ['https://hirose-fx.jp','https://hirose-fx.co.jp']:
+                  url = f'{host}/pdf/deposit/{ymd}/lionfx.pdf'
+                  try:
+                      req = urllib.request.Request(url, headers=headers)
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          raw = r.read()
+                      text = '\n'.join((p.extract_text() or '') for p in PdfReader(io.BytesIO(raw)).pages)
+                      flat = re.sub(r'[ \t]+', ' ', text)
+                      m = re.search(r'USD/TRY\s+1,000(?:通貨)?\s+([0-9,]+)\s*円', flat, re.S)
+                      if not m:
+                          i = flat.find('USD/TRY')
+                          print('NO_MATCH', date, url, repr(flat[max(0,i-80):i+180] if i >= 0 else flat[:300]))
+                          continue
                       print('MARGIN', date, int(m.group(1).replace(',','')), url)
-              except Exception as e:
-                  print('ERROR', date, type(e).__name__, str(e))
+                      found = True
+                      break
+                  except Exception as e:
+                      print('ERROR', date, url, type(e).__name__, str(e))
+              if not found:
+                  print('FAILED', date)
           PY
