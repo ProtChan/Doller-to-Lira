@@ -75,8 +75,12 @@ try {
     const officialResolution = official
       ? window.__DTL_MARGIN_RESOLUTION__?.(official.date, 999)
       : null;
-    const officialDerived = official && typeof derivedDaily === 'function'
-      ? derivedDaily().find((row) => row.date === official.date) || null
+    const derivedRows = typeof derivedDaily === 'function' ? derivedDaily() : [];
+    const officialDerivedRow = [...history].reverse().find((officialRow) =>
+      derivedRows.some((row) => row.date === officialRow.date)
+    ) || null;
+    const officialDerived = officialDerivedRow
+      ? derivedRows.find((row) => row.date === officialDerivedRow.date) || null
       : null;
 
     const addBusinessDay = (date) => {
@@ -97,6 +101,7 @@ try {
       history,
       official,
       officialResolution,
+      officialDerivedRow,
       officialDerived:officialDerived ? {
         date:officialDerived.date,
         marginPer1000:officialDerived.marginPer1000,
@@ -117,10 +122,12 @@ try {
   assert.equal(marginModel.officialResolution?.official, true);
   assert.equal(marginModel.officialResolution?.source, 'hirose-official');
   assert.equal(Number(marginModel.officialResolution?.per1000), Number(marginModel.official.marginPer1000Jpy));
+  assert.ok(marginModel.officialDerivedRow, 'no official margin date overlaps Daily Data');
+  assert.equal(marginModel.officialDerived?.date, marginModel.officialDerivedRow.date);
   assert.equal(marginModel.officialDerived?.marginOfficial, true);
   assert.equal(marginModel.officialDerived?.marginSource, 'hirose-official');
-  assert.equal(Number(marginModel.officialDerived?.marginPer1000), Number(marginModel.official.marginPer1000Jpy));
-  assert.equal(marginModel.officialDerived?.marginReference, marginModel.official.reference);
+  assert.equal(Number(marginModel.officialDerived?.marginPer1000), Number(marginModel.officialDerivedRow.marginPer1000Jpy));
+  assert.equal(marginModel.officialDerived?.marginReference, marginModel.officialDerivedRow.reference);
   assert.equal(marginModel.futureResolution?.official, false);
   assert.equal(marginModel.futureResolution?.source, 'rate-estimate');
   assert.ok(Number(marginModel.futureResolution?.per1000) > 0, 'future margin estimate missing');
