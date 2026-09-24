@@ -25,6 +25,10 @@ assert.ok(currentRows.length >= 3, 'need at least three Hirose rate rows for cor
 const latest = currentRows.at(-1);
 const correctionTarget = currentRows.slice(0, -1).reverse().find((row) => row?.publishedAt) || currentRows.at(-2);
 const previous = currentRows.at(-2);
+const orphanDateValue = new Date(`${latest.date}T12:00:00Z`);
+orphanDateValue.setUTCDate(orphanDateValue.getUTCDate() + 1);
+while (currentRows.some((row) => row.date === orphanDateValue.toISOString().slice(0, 10))) orphanDateValue.setUTCDate(orphanDateValue.getUTCDate() + 1);
+const orphanDate = orphanDateValue.toISOString().slice(0, 10);
 const staleRate = Number((Number(correctionTarget.usdTryAskClose23) * 1.0007).toFixed(6));
 const staleUsdJpy = Number((Number(correctionTarget.usdJpyAskClose23) * 0.9993).toFixed(6));
 let liveFetchCount = 0;
@@ -59,10 +63,15 @@ const pageErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 
 try {
-  await page.addInitScript(() => {
-    // Legacy preference must no longer prevent provider updates.
+  await page.addInitScript(({ orphanDate, rate, usdJpy }) => {
+    // Legacy preference must no longer prevent provider updates. Also simulate a
+    // provider row that was published previously and later withdrawn upstream.
     localStorage.setItem('dollar-to-lira:rate-source:v1', 'manual');
-  });
+    localStorage.setItem('dollar-to-lira:v1', JSON.stringify({
+      settings:{}, positions:[], updatedAt:null,
+      daily:[{ date:orphanDate, rate, usdJpy, tryJpy:usdJpy/rate, rateSource:'provider', rateSourcePrice:'ASK' }]
+    }));
+  }, { orphanDate, rate:Number(latest.usdTryAskClose23), usdJpy:Number(latest.usdJpyAskClose23) });
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.documentElement.dataset.appReady === '1', { timeout: 15000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseRateHistoryReady === '1', { timeout: 15000 });
@@ -79,11 +88,13 @@ try {
 
   // No manual API call here: boot refresh itself must add the missing latest date and
   // overwrite the stale value for the already-existing historical correction date.
-  await page.waitForFunction(({ latest, correction }) => {
+  await page.waitForFunction(({ latest, correction, orphanDate }) => {
     const saved = JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}');
     const latestRow = saved.daily?.find((item) => item.date === latest.date);
     const correctedRow = saved.daily?.find((item) => item.date === correction.date);
+    const orphanRow = saved.daily?.find((item) => item.date === orphanDate);
     return Number(document.documentElement.dataset.liveRateRefreshGeneration || 0) >= 1
+      && !orphanRow
       && latestRow?.rateSource === 'provider'
       && correctedRow?.rateSource === 'provider'
       && Math.abs(Number(latestRow.rate) - Number(latest.rate)) < 1e-10
@@ -92,7 +103,8 @@ try {
       && Math.abs(Number(correctedRow.usdJpy) - Number(correction.usdJpy)) < 1e-10;
   }, {
     latest: { date: latest.date, rate: latest.usdTryAskClose23, usdJpy: latest.usdJpyAskClose23 },
-    correction: { date: correctionTarget.date, rate: correctionTarget.usdTryAskClose23, usdJpy: correctionTarget.usdJpyAskClose23 }
+    correction: { date: correctionTarget.date, rate: correctionTarget.usdTryAskClose23, usdJpy: correctionTarget.usdJpyAskClose23 },
+    orphanDate
   }, { timeout: 10000 });
 
   const live = await page.evaluate(({ latestDate, correctionDate }) => ({
@@ -101,18 +113,22 @@ try {
     ready: document.documentElement.dataset.liveRateRefreshReady,
     end: document.documentElement.dataset.liveRateRefreshEnd,
     updated: Number(document.documentElement.dataset.liveRateRefreshUpdated || 0),
+    removed: Number(document.documentElement.dataset.liveRateRefreshRemoved || 0),
     generation: Number(document.documentElement.dataset.liveRateRefreshGeneration || 0),
     latest: window.__DTL_LIVE_HIROSE_RATE_AT__?.(latestDate) || null,
     corrected: window.__DTL_LIVE_HIROSE_RATE_AT__?.(correctionDate) || null,
     storedLatest: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === latestDate) || null,
-    storedCorrected: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === correctionDate) || null
-  }), { latestDate: latest.date, correctionDate: correctionTarget.date });
+    storedCorrected: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === correctionDate) || null,
+    storedOrphan: JSON.parse(localStorage.getItem('dollar-to-lira:v1') || '{}').daily?.find((row) => row.date === orphanDate) || null
+  }), { latestDate: latest.date, correctionDate: correctionTarget.date, orphanDate });
 
   assert.equal(live.mode, 'auto');
   assert.equal(live.service, 'provider-readonly');
   assert.equal(live.ready, '1');
   assert.equal(live.end, latest.date);
   assert.ok(live.generation >= 1);
+  assert.ok(live.removed >= 1, 'withdrawn provider row was not counted as removed');
+  assert.equal(live.storedOrphan, null, 'withdrawn provider row survived authoritative reconciliation');
   assert.equal(live.latest?.usdTryAskClose23, Number(latest.usdTryAskClose23));
   assert.equal(live.corrected?.usdTryAskClose23, Number(correctionTarget.usdTryAskClose23));
   assert.equal(live.storedLatest?.rateSource, 'provider');
