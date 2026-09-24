@@ -200,9 +200,11 @@
           refreshFromProvider();
           const updated = Number(result?.updated || 0);
           const added = Number(result?.added || 0);
-          const suffix = updated || added ? ` · 更新 ${updated}件 / 追加 ${added}件` : ' · 最新です';
+          const removed = Number(result?.removed || 0);
+          const changed = updated || added || removed;
+          const suffix = changed ? ` · 更新 ${updated}件 / 追加 ${added}件 / 撤回 ${removed}件` : ' · 最新です';
           setRefreshStatus(`${formatSyncTime(root.dataset.liveRateRefreshLastAt)}${suffix}`, 'success');
-          try { toast(updated || added ? '最新の配信データを反映しました' : '配信データは最新です'); } catch (_) {}
+          try { toast(changed ? '最新の配信データを反映しました' : '配信データは最新です'); } catch (_) {}
         } catch (error) {
           setRefreshStatus('更新失敗 · 通信状態を確認', 'error');
           try { toast('配信データの更新に失敗しました'); } catch (_) {}
@@ -331,8 +333,9 @@
   window.addEventListener('dtl:provider-rates-refreshed', (event) => {
     refreshFromProvider();
     const detail = event.detail || {};
-    const suffix = Number(detail.updated || 0) || Number(detail.added || 0)
-      ? ` · 更新 ${Number(detail.updated || 0)}件 / 追加 ${Number(detail.added || 0)}件`
+    const changed = Number(detail.updated || 0) || Number(detail.added || 0) || Number(detail.removed || 0);
+    const suffix = changed
+      ? ` · 更新 ${Number(detail.updated || 0)}件 / 追加 ${Number(detail.added || 0)}件 / 撤回 ${Number(detail.removed || 0)}件`
       : ' · 最新';
     setRefreshStatus(`${formatSyncTime(detail.finishedAt || root.dataset.liveRateRefreshLastAt)}${suffix}`, 'success');
   });
