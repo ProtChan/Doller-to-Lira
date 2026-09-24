@@ -8,7 +8,7 @@
   "generatedFromUpload": "USDTRY_60分足_ASK_202609072255.zip",
   "historyStart": "2026-07-10",
   "historyEnd": "2026-09-25",
-  "records": 55,
+  "records": 56,
   "history": [
     {
       "date": "2026-07-10",
@@ -323,6 +323,14 @@
       "publishedAt": "2026-09-23T15:14:08Z"
     },
     {
+      "date": "2026-09-24",
+      "usdTryAskClose23": 48.8572,
+      "usdJpyAskClose23": 158.899,
+      "usdTryAskDayHigh": 48.925,
+      "verification": "owner-manual",
+      "publishedAt": "2026-09-24T15:05:03Z"
+    },
+    {
       "date": "2026-09-25",
       "usdTryAskClose23": 48.8572,
       "usdJpyAskClose23": 158.899,
@@ -331,5 +339,5 @@
       "publishedAt": "2026-09-24T15:04:37Z"
     }
   ],
-  "lastManualPublication": "2026-09-24T15:04:37Z"
+  "lastManualPublication": "2026-09-24T15:05:03Z"
 }
