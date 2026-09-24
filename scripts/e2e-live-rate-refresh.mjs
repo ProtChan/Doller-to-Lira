@@ -107,7 +107,7 @@ try {
     orphanDate
   }, { timeout: 10000 });
 
-  const live = await page.evaluate(({ latestDate, correctionDate }) => ({
+  const live = await page.evaluate(({ latestDate, correctionDate, orphanDate }) => ({
     mode: document.documentElement.dataset.rateSourceMode,
     service: document.documentElement.dataset.dailyDataMode,
     ready: document.documentElement.dataset.liveRateRefreshReady,
