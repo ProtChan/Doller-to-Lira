@@ -61,10 +61,22 @@
   const same = (a, b) => Math.abs(Number(a || 0) - Number(b || 0)) < 1e-10;
 
   const reconcilePublishedRows = () => {
-    if (!Array.isArray(state?.daily) || !liveByDate.size) return { added:0, updated:0 };
+    if (!Array.isArray(state?.daily) || !liveByDate.size) return { added:0, updated:0, removed:0 };
     const byDate = new Map(state.daily.map((row) => [row?.date, row]).filter(([date]) => date));
     let added = 0;
     let updated = 0;
+    let removed = 0;
+
+    // The fetched JSON is the complete provider-owned history. If a previously
+    // synchronized provider row disappears from that history, treat it as an
+    // explicit withdrawal and remove the stale local copy as well.
+    const publishedDates = new Set(liveByDate.keys());
+    for (const [date, existing] of [...byDate.entries()]) {
+      if (existing?.rateSource === 'provider' && !publishedDates.has(date)) {
+        byDate.delete(date);
+        removed += 1;
+      }
+    }
 
     [...liveByDate.values()].sort((a,b) => String(a.date).localeCompare(String(b.date))).forEach((raw) => {
       const source = enrich(raw, raw?.date) || raw;
@@ -111,7 +123,7 @@
       else added += 1;
     });
 
-    if (added || updated) {
+    if (added || updated || removed) {
       state.daily = [...byDate.values()].sort((a,b) => String(a.date).localeCompare(String(b.date)));
       state.updatedAt = new Date().toISOString();
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -119,7 +131,7 @@
       try { if (typeof invalidatePerformanceCaches === 'function') invalidatePerformanceCaches(); } catch (_) {}
       try { window.__DTL_BACKEND_INVALIDATE__?.(); } catch (_) {}
     }
-    return { added, updated };
+    return { added, updated, removed };
   };
 
   const publishState = (data, rows, result, reason) => {
@@ -133,6 +145,7 @@
     root.dataset.liveRateRefreshEnd = sorted.at(-1)?.date || '';
     root.dataset.liveRateRefreshAdded = String(result.added || 0);
     root.dataset.liveRateRefreshUpdated = String(result.updated || 0);
+    root.dataset.liveRateRefreshRemoved = String(result.removed || 0);
     root.dataset.liveRateRefreshLastAt = finishedAt;
     root.dataset.liveRateRefreshPublication = publication;
     root.dataset.liveRateRefreshReason = reason || 'auto';
@@ -147,7 +160,7 @@
     const now = Date.now();
     if (!force && now - lastRefreshAt < 1500 && liveByDate.size) {
       installRateOverlay();
-      return Promise.resolve({ refreshed:false, records:liveByDate.size, added:0, updated:0 });
+      return Promise.resolve({ refreshed:false, records:liveByDate.size, added:0, updated:0, removed:0 });
     }
     if (refreshPromise) return refreshPromise;
 
@@ -161,6 +174,10 @@
         const rows = Array.isArray(data?.history)
           ? data.history.filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
           : [];
+        const declaredRecords = Number(data?.records);
+        if (Number.isFinite(declaredRecords) && declaredRecords >= 0 && rows.length !== declaredRecords) {
+          throw new Error(`Hirose live rate feed incomplete: declared ${declaredRecords}, received ${rows.length}`);
+        }
         liveByDate = new Map(rows.map((row) => [row.date, { ...row }]));
         lastRefreshAt = Date.now();
         installRateOverlay();
