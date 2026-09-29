@@ -3,6 +3,7 @@ import json
 import re
 import time
 import urllib.request
+from urllib.error import HTTPError
 from datetime import datetime, timezone
 from html import unescape
 from pathlib import Path
@@ -42,10 +43,18 @@ def fetch_bytes(url: str, attempts: int = 3) -> bytes:
             req = urllib.request.Request(url, headers=UA)
             with urllib.request.urlopen(req, timeout=30) as response:
                 return response.read()
+        except HTTPError as exc:
+            # A hosted-runner 403 is deterministic for the direct Hirose endpoint.
+            # Fall back immediately instead of burning ~6 seconds retrying the same block.
+            if exc.code in (403, 404, 410):
+                raise
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(1.0 + attempt)
         except Exception as exc:
             last_error = exc
             if attempt + 1 < attempts:
-                time.sleep(2.0 + attempt * 2.0)
+                time.sleep(1.0 + attempt)
     if last_error is None:
         raise RuntimeError(f'Fetch failed without an exception: {url}')
     raise last_error
