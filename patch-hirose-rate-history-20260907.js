@@ -104,7 +104,12 @@
     return response.json();
   });
 
-  Promise.all([fetchJson(FEED_URL), fetchJson(BACKFILL_URL)])
+  // Share the authoritative primary boot read with the live-refresh layer.
+  // This removes a duplicate no-store request from the critical startup window.
+  const primaryBootPromise = window.__DTL_HIROSE_PRIMARY_BOOT_PROMISE__ || fetchJson(FEED_URL);
+  window.__DTL_HIROSE_PRIMARY_BOOT_PROMISE__ = primaryBootPromise;
+
+  Promise.all([primaryBootPromise, fetchJson(BACKFILL_URL)])
     .then(([primary, backfill]) => {
       const primaryRows = Array.isArray(primary?.history) ? primary.history : [];
       const backfillRows = Array.isArray(backfill?.history) ? backfill.history : [];
