@@ -156,7 +156,7 @@
     }));
   };
 
-  const refresh = ({ force=false, reason='auto' } = {}) => {
+  const refresh = ({ force=false, reason='auto', sourcePromise=null } = {}) => {
     const now = Date.now();
     if (!force && now - lastRefreshAt < 1500 && liveByDate.size) {
       installRateOverlay();
@@ -165,11 +165,13 @@
     if (refreshPromise) return refreshPromise;
 
     root.dataset.liveRateRefreshPending = '1';
-    refreshPromise = fetch(`${FEED_URL}?live=${now}`, { cache:'no-store' })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Hirose live rate HTTP ${response.status}`);
-        return response.json();
-      })
+    const source = sourcePromise
+      ? Promise.resolve(sourcePromise)
+      : fetch(`${FEED_URL}?live=${now}`, { cache:'no-store' }).then((response) => {
+          if (!response.ok) throw new Error(`Hirose live rate HTTP ${response.status}`);
+          return response.json();
+        });
+    refreshPromise = source
       .then((data) => {
         const rows = Array.isArray(data?.history)
           ? data.history.filter((row) => row?.date && Number(row.usdTryAskClose23) > 0 && Number(row.usdJpyAskClose23) > 0)
@@ -246,7 +248,12 @@
 
   const bootRefresh = () => {
     installRateOverlay();
-    refresh({ force:true, reason:'boot' }).catch(() => {});
+    const sharedBoot = window.__DTL_HIROSE_PRIMARY_BOOT_PROMISE__ || null;
+    refresh({
+      force:true,
+      reason:sharedBoot ? 'boot-shared-primary' : 'boot',
+      sourcePromise:sharedBoot
+    }).catch(() => {});
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootRefresh, { once:true });
   else setTimeout(bootRefresh, 0);

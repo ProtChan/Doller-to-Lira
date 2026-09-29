@@ -1,6 +1,7 @@
 // Startup readiness coordinator.
-// Keeps the page covered until provider data, derived values, and the overview chart
-// are actually ready. During startup, repeated async feed renders are coalesced.
+// Keeps the page covered until the critical provider data and derived values are
+// ready. Optional margin/chart enhancements hydrate after first paint so slow
+// secondary resources never hold the whole application behind the loader.
 (() => {
   const root = document.documentElement;
   if (root.dataset.startupCoordinator === '1') return;
@@ -36,10 +37,13 @@
     rates: providerSettled('hiroseRateHistoryReady'),
     liveRates: providerSettled('liveRateRefreshReady'),
     swap: providerSettled('hiroseFeedReady'),
-    margin: providerSettled('hiroseMarginReady'),
     daily: root.dataset.dailyDataService === '1',
+    // Optional enhancement markers are still tracked for diagnostics, but they
+    // intentionally do not block first usable paint.
+    margin: providerSettled('hiroseMarginReady'),
     chartLibrary: typeof window.Chart !== 'undefined'
   });
+  const CRITICAL_KEYS = ['bundle', 'app', 'backend', 'rates', 'liveRates', 'swap', 'daily'];
 
   const updateMarks = (state) => {
     Object.entries(state).forEach(([key, value]) => { if (value) mark(key); });
@@ -53,18 +57,13 @@
       detail.textContent = '計算エンジンを初期化中…';
       return;
     }
-    if (!state.rates || !state.liveRates || !state.swap || !state.margin || !state.daily) {
+    if (!state.rates || !state.liveRates || !state.swap || !state.daily) {
       label.textContent = '配信データを同期しています';
-      detail.textContent = 'レート・Swap・必要証拠金を確認中…';
-      return;
-    }
-    if (!state.chartLibrary) {
-      label.textContent = 'グラフを準備しています';
-      detail.textContent = 'チャートライブラリを読み込み中…';
+      detail.textContent = 'レート・Swapを確認中…';
       return;
     }
     label.textContent = '表示を仕上げています';
-    detail.textContent = '数値とグラフを描画中…';
+    detail.textContent = '最新の数値を描画中…';
   };
 
   const chartIsReady = () => {
@@ -131,11 +130,11 @@
     const state = criticalState();
     updateMarks(state);
     setLoadingCopy(state);
-    const coreReady = Object.values(state).every(Boolean);
+    const coreReady = CRITICAL_KEYS.every((key) => state[key]);
     if (coreReady) {
       runFinalRender();
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (valuesAreReady() && chartIsReady()) {
+        if (valuesAreReady()) {
           commitReady();
         } else {
           scheduleCheck(45);
@@ -153,6 +152,22 @@
   };
 
   const baseRenderAll = renderAll;
+  const hydrateChart = () => {
+    if (typeof window.Chart === 'undefined') return;
+    mark('chartLibrary');
+    // If Chart.js arrived before critical data, the normal final render will draw it.
+    // If it arrived after first paint, hydrate the chart without reopening the loader.
+    if (!readyCommitted) {
+      scheduleCheck();
+      return;
+    }
+    requestAnimationFrame(() => {
+      try { baseRenderAll(); } catch (error) { console.warn('chart hydration render failed', error); }
+    });
+  };
+  window.addEventListener('dtl:chart-library-ready', hydrateChart);
+  if (typeof window.Chart !== 'undefined') queueMicrotask(hydrateChart);
+
   renderAll = function(...args) {
     // Keep the bootstrap render synchronous so data-app-ready retains its historical
     // meaning. Only later feed-driven startup renders are coalesced.

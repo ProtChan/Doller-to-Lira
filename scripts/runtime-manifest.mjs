@@ -1,4 +1,4 @@
-export const BUILD = '20260930-0135';
+export const BUILD = '20260930-0225';
 
 // Canonical execution order for the browser application. Production never loads
 // these files individually: scripts/build-app.mjs concatenates them into one bundle.
@@ -34,8 +34,8 @@ export const SOURCE_FILES = [
   'patch-calendar-swap-days-20260913.js',
   'patch-pnl-date-alignment-20260911.js',
   'patch-readonly-daily-service-20260912.js',
-  // Final startup gate: keep the loading screen until provider data + values + chart
-  // are ready, and coalesce feed-driven renders during that window.
+  // Final startup gate: block only on critical provider data + KPI values. Optional
+  // margin/chart resources hydrate after first paint, while startup renders coalesce.
   'patch-startup-readiness-20260930.js'
 ];
 
