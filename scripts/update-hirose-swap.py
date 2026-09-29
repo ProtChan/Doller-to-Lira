@@ -93,14 +93,14 @@ def fetch_html(url: str = SOURCE) -> str:
 
 
 def parse_latest_html(html: str) -> dict:
-    rows = re.findall(r'<tr\\b[^>]*>(.*?)</tr>', html, flags=re.I | re.S)
+    rows = re.findall(r'<tr\b[^>]*>(.*?)</tr>', html, flags=re.I | re.S)
     target = None
     target_pos = None
-    for match in re.finditer(r'<tr\\b[^>]*>(.*?)</tr>', html, flags=re.I | re.S):
+    for match in re.finditer(r'<tr\b[^>]*>(.*?)</tr>', html, flags=re.I | re.S):
         row_html = match.group(1)
         if 'USD/TRY' not in clean_html(row_html):
             continue
-        cells = re.findall(r'<t[dh]\\b[^>]*>(.*?)</t[dh]>', row_html, flags=re.I | re.S)
+        cells = re.findall(r'<t[dh]\b[^>]*>(.*?)</t[dh]>', row_html, flags=re.I | re.S)
         values = [clean_html(c) for c in cells]
         if values and values[0].replace(' ', '') == 'USD/TRY':
             target = values
@@ -110,8 +110,8 @@ def parse_latest_html(html: str) -> dict:
         raise RuntimeError(f'USD/TRY row not found or malformed: {target!r}; rows={len(rows)}')
 
     prefix = html[:target_pos]
-    prefix_without_links = re.sub(r'<a\\b[^>]*>.*?</a>', ' ', prefix, flags=re.I | re.S)
-    date_pattern = r'(20\\d{2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日'
+    prefix_without_links = re.sub(r'<a\b[^>]*>.*?</a>', ' ', prefix, flags=re.I | re.S)
+    date_pattern = r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日'
     date_matches = list(re.finditer(date_pattern, clean_html(prefix_without_links)))
     if not date_matches:
         date_matches = list(re.finditer(date_pattern, clean_html(prefix)))
@@ -153,7 +153,7 @@ def parse_latest_reader(text: str) -> dict:
         raise RuntimeError('USD/TRY row not found in reader fallback')
 
     prefix = '\n'.join(lines[:target_index + 1])
-    date_pattern = r'(20\\d{2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日'
+    date_pattern = r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日'
     date_matches = list(re.finditer(date_pattern, prefix))
     if not date_matches:
         raise RuntimeError('Current swap table date not found in reader fallback')
@@ -177,7 +177,7 @@ def parse_latest_reader(text: str) -> dict:
 
 
 def parse_latest(document: str) -> dict:
-    if re.search(r'<tr\\b', document, flags=re.I):
+    if re.search(r'<tr\b', document, flags=re.I):
         return parse_latest_html(document)
     return parse_latest_reader(document)
 
