@@ -35,7 +35,7 @@
   <link rel="stylesheet" href="./styles.css?v=20260906-1140" />
   <link rel="stylesheet" href="./pwa-mobile-20260906.css?v=20260906-1140" />
   <script src="./runtime-20260906-1140.js?v=20260911-0035" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" async fetchpriority="low" onload="window.dispatchEvent(new Event('dtl:chart-library-ready'))"></script>
 </head>
 <body>
   <div id="appLoadingScreen" role="status" aria-live="polite" aria-busy="true">
