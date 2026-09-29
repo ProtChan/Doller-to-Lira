@@ -17,7 +17,7 @@ page.on('pageerror', (error) => pageErrors.push(error.message));
 // Keep one critical provider feed slow enough to prove that the loading screen is
 // tied to real readiness rather than a fixed splash timeout.
 await context.route(/\/data\/hirose-usdtry-margin\.json/, async (route) => {
-  await new Promise((resolve) => setTimeout(resolve, 350));
+  await new Promise((resolve) => setTimeout(resolve, 900));
   await route.continue();
 });
 
@@ -57,7 +57,7 @@ try {
   assert.ok(visible.chartPoints > 0, 'overview chart has no data before loader dismissal');
   assert.ok(visible.canvasWidth > 0 && visible.canvasHeight > 0, 'overview chart canvas has no rendered size');
   assert.ok(visible.diag?.ready, 'startup diagnostics did not mark ready');
-  assert.ok(Number(visible.diag?.startupMs || 0) >= 250, 'readiness ignored the intentionally delayed provider feed');
+  assert.ok(Number(visible.diag?.startupMs || 0) >= 700, 'readiness ignored the intentionally delayed provider feed');
   assert.ok(Number(visible.diag?.startupMs || 0) < 15000, 'startup exceeded readiness timeout');
 
   console.log('STARTUP DIAGNOSTICS=', JSON.stringify(visible.diag));
