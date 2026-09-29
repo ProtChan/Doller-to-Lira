@@ -11,8 +11,21 @@ SOURCE = 'https://hirose-fx.co.jp/contents/news/Swap'
 SEED_SOURCE = 'https://raw.githubusercontent.com/ProtChan/USDTRY/main/data/usdtry.json'
 SEED_START = '2026-07-01'
 OUT = Path('data/hirose-usdtry-swap.json')
-# Keep the same lightweight request style that is already working in ProtChan/USDTRY.
-UA = {'User-Agent': 'Mozilla/5.0 USDTRY-swap-watch/1.3'}
+# Use ordinary browser navigation headers. Hirose started returning HTTP 403 to
+# the old automation-identifying UA on hosted CI runners on 2026-09-29.
+UA = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/154.0.0.0 Safari/537.36'
+    ),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Referer': 'https://hirose-fx.co.jp/',
+    'Upgrade-Insecure-Requests': '1',
+}
 
 
 def clean_html(fragment: str) -> str:
@@ -159,7 +172,10 @@ def main():
     data['seedSource'] = SEED_SOURCE
     data['historyStart'] = SEED_START
     data['pair'] = 'USD/TRY'
-    if changed or not data.get('updatedAt') or not data.get('history') or min(history) == SEED_START:
+    # updatedAt means the feed content changed, not merely that a scheduled poll ran.
+    # The old `or min(history) == SEED_START` branch was always true after seeding
+    # and caused an unnecessary commit/deploy on every successful poll.
+    if changed or not data.get('updatedAt') or not data.get('history'):
         data['updatedAt'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     data['history'] = [history[key] for key in sorted(history)]
 
