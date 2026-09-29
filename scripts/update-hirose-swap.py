@@ -4,7 +4,7 @@ import re
 import time
 import urllib.request
 from urllib.error import HTTPError
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
 
@@ -155,12 +155,25 @@ def parse_latest_reader(text: str) -> dict:
     prefix = '\n'.join(lines[:target_index + 1])
     date_pattern = r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日'
     date_matches = list(re.finditer(date_pattern, prefix))
-    if not date_matches:
-        sample = prefix[-1800:].replace('\\n', ' | ')
-        date_context = [line.strip() for line in lines if re.search(r'20\\d{2}|年|月|日', line)][:80]
-        raise RuntimeError(f'Current swap table date not found in reader fallback; date_context={date_context!r}; prefix_tail={sample!r}')
-    m = date_matches[-1]
-    date = f'{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}'
+    if date_matches:
+        m = date_matches[-1]
+        date = f'{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}'
+    else:
+        # Jina's markdown reader currently omits the selected table date while
+        # preserving Hirose's official "YYYY 年 MM 月 DD 日 更新" stamp.
+        # Only for this reader transport fallback, map that publication stamp to
+        # the immediately preceding weekday (the completed trading day).
+        updated_pattern = r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*更新'
+        updated_matches = list(re.finditer(updated_pattern, text))
+        if not updated_matches:
+            raise RuntimeError('Current swap table date and update stamp not found in reader fallback')
+        m = updated_matches[-1]
+        updated = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=timezone.utc)
+        source = updated - timedelta(days=1)
+        while source.weekday() >= 5:
+            source -= timedelta(days=1)
+        date = source.date().isoformat()
+        print(f'reader_update_date={updated.date().isoformat()} inferred_source_date={date}')
 
     def n(value: str) -> float:
         cleaned = re.sub(r'[^0-9+.,-]', '', value)
