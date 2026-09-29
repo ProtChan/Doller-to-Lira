@@ -1,4 +1,4 @@
-export const BUILD = '20260930-0225';
+export const BUILD = '20260930-0310';
 
 // Canonical execution order for the browser application. Production never loads
 // these files individually: scripts/build-app.mjs concatenates them into one bundle.
