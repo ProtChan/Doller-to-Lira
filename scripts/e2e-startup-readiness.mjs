@@ -18,11 +18,17 @@ page.on('pageerror', (error) => pageErrors.push(error.message));
 // resources much slower. Startup must wait for Swap, but it must not wait for the
 // optional resources before exposing usable KPI values.
 let swapReleased = false;
+let liveRateReleased = false;
 let marginReleased = false;
 let chartReleased = false;
 await context.route(/\/data\/hirose-usdtry-swap\.json/, async (route) => {
   await new Promise((resolve) => setTimeout(resolve, 500));
   swapReleased = true;
+  await route.continue();
+});
+await context.route(/\/data\/hirose-ask-close-23\.json\?live=/, async (route) => {
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  liveRateReleased = true;
   await route.continue();
 });
 await context.route(/\/data\/hirose-usdtry-margin\.json/, async (route) => {
@@ -50,8 +56,10 @@ try {
 
   await page.waitForFunction(() => document.documentElement.dataset.startupReady === '1', { timeout:15000 });
   assert.equal(swapReleased, true, 'startup became ready before critical Swap settled');
+  assert.equal(liveRateReleased, false, 'startup incorrectly waited for optional live-rate recheck');
   assert.equal(marginReleased, false, 'startup incorrectly waited for optional margin feed');
   assert.equal(chartReleased, false, 'startup incorrectly waited for optional Chart.js');
+  assert.notEqual(await page.locator('html').getAttribute('data-live-rate-refresh-ready'), '1', 'slow live-rate recheck blocked first usable paint');
 
   await page.waitForFunction(() => {
     const overlay = document.getElementById('appLoadingScreen');
@@ -74,6 +82,7 @@ try {
   assert.ok(Number(visible.diag?.startupMs || 0) < 2000, 'startup waited for a deliberately slow optional resource');
 
   // Optional resources must still hydrate correctly after the application is usable.
+  await page.waitForFunction(() => document.documentElement.dataset.liveRateRefreshReady === '1', { timeout:5000 });
   await page.waitForFunction(() => document.documentElement.dataset.hiroseMarginReady === '1', { timeout:5000 });
   await page.waitForFunction(() => {
     const chart = charts?.overviewChart || window.Chart?.getChart?.(document.getElementById('overviewChart'));

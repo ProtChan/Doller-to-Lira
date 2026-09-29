@@ -38,12 +38,12 @@
     liveRates: providerSettled('liveRateRefreshReady'),
     swap: providerSettled('hiroseFeedReady'),
     daily: root.dataset.dailyDataService === '1',
-    // Optional enhancement markers are still tracked for diagnostics, but they
-    // intentionally do not block first usable paint.
+    // Optional enhancement markers are still tracked for diagnostics. The live
+    // freshness recheck, margin feed, and chart library never block first paint.
     margin: providerSettled('hiroseMarginReady'),
     chartLibrary: typeof window.Chart !== 'undefined'
   });
-  const CRITICAL_KEYS = ['bundle', 'app', 'backend', 'rates', 'liveRates', 'swap', 'daily'];
+  const CRITICAL_KEYS = ['bundle', 'app', 'backend', 'rates', 'swap', 'daily'];
 
   const updateMarks = (state) => {
     Object.entries(state).forEach(([key, value]) => { if (value) mark(key); });
@@ -57,7 +57,7 @@
       detail.textContent = '計算エンジンを初期化中…';
       return;
     }
-    if (!state.rates || !state.liveRates || !state.swap || !state.daily) {
+    if (!state.rates || !state.swap || !state.daily) {
       label.textContent = '配信データを同期しています';
       detail.textContent = 'レート・Swapを確認中…';
       return;
