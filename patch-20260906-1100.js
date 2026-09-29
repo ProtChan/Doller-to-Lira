@@ -209,7 +209,7 @@ $('exportCsvBtn')?.addEventListener('click', (event) => {
   download(`dollar-to-lira_daily_${isoToday()}.csv`, csv, 'text/csv;charset=utf-8');
 }, true);
 
-// Re-run the visible state using V2 calculations after the original bootstrap.
-fillDefaults();
-renderAll();
+// The production bundle finishes installing all calculation layers before the
+// DOMContentLoaded bootstrap. Rendering here would run the legacy LC/backend path
+// several times during startup, so the single bootstrap render owns first paint.
 document.documentElement.dataset.accountingV2 = '1';
