@@ -286,5 +286,5 @@
   window.__DTL_CAPITAL_FLOWS__ = () => flows().map((row) => ({ ...row }));
   root.dataset.capitalHistory = '1';
   root.dataset.capitalHistoryAccounting = '1';
-  try { renderAll(); } catch (_) {}
+  // Avoid a pre-bootstrap render with the legacy derived/LC implementation.
 })();
