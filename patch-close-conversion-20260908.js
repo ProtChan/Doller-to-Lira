@@ -138,5 +138,5 @@
   };
 
   document.documentElement.dataset.closeConversionRate = '1';
-  try { renderAll(); } catch (_) {}
+  // First paint is owned by bootstrap after every runtime layer has been installed.
 })();
