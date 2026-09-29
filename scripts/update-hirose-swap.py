@@ -157,7 +157,8 @@ def parse_latest_reader(text: str) -> dict:
     date_matches = list(re.finditer(date_pattern, prefix))
     if not date_matches:
         sample = prefix[-1800:].replace('\\n', ' | ')
-        raise RuntimeError(f'Current swap table date not found in reader fallback; prefix_tail={sample!r}')
+        date_context = [line.strip() for line in lines if re.search(r'20\\d{2}|年|月|日', line)][:80]
+        raise RuntimeError(f'Current swap table date not found in reader fallback; date_context={date_context!r}; prefix_tail={sample!r}')
     m = date_matches[-1]
     date = f'{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}'
 
