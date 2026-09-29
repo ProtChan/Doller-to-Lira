@@ -7,16 +7,17 @@ const root = process.cwd();
 const out = path.join(root, OUTPUT_DIR);
 
 assert.equal(new Set(SOURCE_FILES).size, SOURCE_FILES.length, 'runtime manifest contains duplicate source files');
-assert.equal(SOURCE_FILES.length, 18, 'provider runtime unexpectedly regained a compatibility layer');
+assert.equal(SOURCE_FILES.length, 19, 'provider runtime source count changed unexpectedly');
 assert.ok(SOURCE_FILES[0] === 'app.js', 'app.js must be the first runtime source');
 assert.ok(SOURCE_FILES.includes('patch-hirose-core-20260913.js'), 'unified Hirose core must be bundled');
 assert.ok(SOURCE_FILES.includes('patch-position-edit-fast-lc-20260913.js'), 'position editing/fast LC core must be bundled');
 assert.ok(SOURCE_FILES.includes('patch-ask-day-high-20260913.js'), 'read-only ASK-high feed must be bundled');
 assert.ok(SOURCE_FILES.includes('patch-private-publisher-layout-20260913.js'), 'public compact layout must be bundled');
-assert.equal(SOURCE_FILES.at(-4), 'patch-backend-core-20260913.js', 'canonical provider backend must own derived accounting');
-assert.equal(SOURCE_FILES.at(-3), 'patch-calendar-swap-days-20260913.js', 'calendar swap-day badge must be presentation-only');
-assert.equal(SOURCE_FILES.at(-2), 'patch-pnl-date-alignment-20260911.js', 'PnL presentation must follow accounting');
-assert.equal(SOURCE_FILES.at(-1), 'patch-readonly-daily-service-20260912.js', 'provider-readonly policy must be the final runtime layer');
+assert.equal(SOURCE_FILES.at(-5), 'patch-backend-core-20260913.js', 'canonical provider backend must own derived accounting');
+assert.equal(SOURCE_FILES.at(-4), 'patch-calendar-swap-days-20260913.js', 'calendar swap-day badge must be presentation-only');
+assert.equal(SOURCE_FILES.at(-3), 'patch-pnl-date-alignment-20260911.js', 'PnL presentation must follow accounting');
+assert.equal(SOURCE_FILES.at(-2), 'patch-readonly-daily-service-20260912.js', 'provider-readonly policy must precede the startup gate');
+assert.equal(SOURCE_FILES.at(-1), 'patch-startup-readiness-20260930.js', 'startup readiness gate must be the final runtime layer');
 for (const retired of RETIRED_RUNTIME_FILES) {
   assert.ok(!SOURCE_FILES.includes(retired), `${retired} is retired and must not be in production runtime`);
 }
@@ -50,6 +51,9 @@ for (const row of marginFeed.history) {
 }
 
 assert.match(index, new RegExp(`app\\.bundle\\.js\\?v=${BUILD}`), 'production index does not load the built bundle');
+assert.match(index, /id="appLoadingScreen"/, 'static startup loading screen missing');
+assert.match(index, /__DTL_BOOT_T0__/, 'startup performance origin missing');
+assert.ok(index.indexOf('app.bundle.js') < index.indexOf('chart.umd.min.js'), 'app bundle must execute before Chart.js so provider fetches can overlap CDN loading');
 assert.doesNotMatch(index, /runtime-[0-9-]+\.js/, 'production index still loads a legacy runtime');
 assert.doesNotMatch(index, /patch-[^"']+\.js/, 'production index directly exposes patch files');
 const localScripts = [...index.matchAll(/<script\s+src="([^"]+)"/g)]
@@ -73,6 +77,9 @@ assert.match(bundle, /dataset\.askDayHighCore = '1'/, 'ASK-high core marker miss
 assert.match(bundle, /dataset\.calendarSwapDaysBadge = '1'/, 'calendar swap badge marker missing');
 assert.match(bundle, /dataset\.pnlDateAlignment = '1'/, 'PnL date-alignment marker missing');
 assert.match(bundle, /dataset\.dailyDataService = '1'/, 'read-only Daily Data service marker missing');
+assert.match(bundle, /dataset\.startupCoordinator = '1'/, 'startup readiness coordinator marker missing');
+assert.match(bundle, /__DTL_STARTUP_DIAGNOSTICS__/, 'startup diagnostics API missing');
+assert.match(bundle, /startupRenderQueued/, 'startup render coalescing missing');
 assert.match(bundle, /dailyDataMode = 'provider-readonly'/, 'provider-driven Daily Data mode marker missing');
 assert.match(bundle, /dailyRateAuthority = 'published-feed'/, 'published rate authority marker missing');
 assert.match(bundle, /dailySwapAuthority = 'hirose-feed'/, 'published swap authority marker missing');
@@ -109,4 +116,13 @@ assert.match(sw, /self\.clients\.claim\(\)/, 'new service worker does not claim 
 assert.match(sw, /self\.skipWaiting\(\)/, 'new service worker does not activate immediately');
 assert.doesNotMatch(sw, /runtime-[0-9-]+\.js/, 'service worker still references legacy runtime');
 
-console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources; ${RETIRED_RUNTIME_FILES.length} compatibility layers retired; provider-only accounting/core + uncached live provider reads guarded)`);
+const [legacyV2Source, closeSource, capitalSource] = await Promise.all([
+  fs.readFile(path.join(root, 'patch-20260906-1100.js'), 'utf8'),
+  fs.readFile(path.join(root, 'patch-close-conversion-20260908.js'), 'utf8'),
+  fs.readFile(path.join(root, 'patch-capital-history-20260908.js'), 'utf8')
+]);
+assert.doesNotMatch(legacyV2Source, /fillDefaults\(\);\s*renderAll\(\);\s*document\.documentElement\.dataset\.accountingV2/, 'V2 layer still forces a pre-bootstrap render');
+assert.doesNotMatch(closeSource, /dataset\.closeConversionRate = '1';\s*try \{ renderAll\(\);/, 'close-conversion layer still forces a pre-bootstrap render');
+assert.doesNotMatch(capitalSource, /dataset\.capitalHistoryAccounting = '1';\s*try \{ renderAll\(\);/, 'capital-history layer still forces a pre-bootstrap render');
+
+console.log(`Backend architecture: PASS (${SOURCE_FILES.length} active sources; ${RETIRED_RUNTIME_FILES.length} compatibility layers retired; startup gate + render de-duplication guarded)`);
