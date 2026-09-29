@@ -13,16 +13,40 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>ドルとリラ | USD/TRY Position Manager</title>
+  <script>window.__DTL_BOOT_T0__=performance.now();document.documentElement.dataset.startupLoading='1';</script>
+  <style id="startup-loading-style">
+    html[data-startup-loading="1"],html[data-startup-loading="1"] body{overflow:hidden}
+    #appLoadingScreen{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:#090b0f;color:#f3f6fa;opacity:1;transition:opacity .2s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    #appLoadingScreen[hidden]{display:none}
+    #appLoadingScreen.is-ready{opacity:0;pointer-events:none}
+    .app-loading-card{width:min(320px,calc(100vw - 48px));display:grid;justify-items:center;gap:10px;text-align:center}
+    .app-loading-mark{font-size:28px;font-weight:900;letter-spacing:-.06em}
+    .app-loading-spinner{width:28px;height:28px;border:2px solid rgba(255,255,255,.14);border-top-color:#7ee787;border-radius:50%;animation:dtl-loading-spin .8s linear infinite;margin:4px 0 6px}
+    .app-loading-card strong{font-size:14px;letter-spacing:-.02em}
+    .app-loading-card small{font-size:10px;color:#778291;line-height:1.5}
+    .app-loading-retry{margin-top:8px;border:1px solid #2a3442;background:#111822;color:#f3f6fa;border-radius:10px;padding:9px 14px;font-size:11px}
+    @keyframes dtl-loading-spin{to{transform:rotate(360deg)}}
+    @media(prefers-reduced-motion:reduce){.app-loading-spinner{animation-duration:1.6s}}
+  </style>
   <link rel="manifest" href="./manifest.webmanifest?v=20260906-1141" />
   <link rel="icon" type="image/svg+xml" href="./icon-dollar-lira.svg?v=20260906-1141" />
   <link rel="apple-touch-icon" href="./icon-dollar-lira.svg?v=20260906-1141" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="./styles.css?v=20260906-1140" />
   <link rel="stylesheet" href="./pwa-mobile-20260906.css?v=20260906-1140" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
   <script src="./runtime-20260906-1140.js?v=20260911-0035" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
+  <div id="appLoadingScreen" role="status" aria-live="polite" aria-busy="true">
+    <div class="app-loading-card">
+      <div class="app-loading-mark">$₺</div>
+      <div class="app-loading-spinner" aria-hidden="true"></div>
+      <strong id="appLoadingLabel">アプリを準備しています</strong>
+      <small id="appLoadingDetail">計算エンジンを初期化中…</small>
+      <button class="app-loading-retry" id="appLoadingRetry" type="button" hidden>再読み込み</button>
+    </div>
+  </div>
   <div class="shell">
     <header class="header">
       <div class="brand">
