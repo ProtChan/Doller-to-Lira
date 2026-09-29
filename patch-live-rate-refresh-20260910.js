@@ -156,7 +156,7 @@
     }));
   };
 
-  const refresh = ({ force=false, reason='auto', sourcePromise=null } = {}) => {
+  const refresh = ({ force=false, reason='auto' } = {}) => {
     const now = Date.now();
     if (!force && now - lastRefreshAt < 1500 && liveByDate.size) {
       installRateOverlay();
@@ -165,12 +165,10 @@
     if (refreshPromise) return refreshPromise;
 
     root.dataset.liveRateRefreshPending = '1';
-    const source = sourcePromise
-      ? Promise.resolve(sourcePromise)
-      : fetch(`${FEED_URL}?live=${now}`, { cache:'no-store' }).then((response) => {
-          if (!response.ok) throw new Error(`Hirose live rate HTTP ${response.status}`);
-          return response.json();
-        });
+    const source = fetch(`${FEED_URL}?live=${now}`, { cache:'no-store' }).then((response) => {
+      if (!response.ok) throw new Error(`Hirose live rate HTTP ${response.status}`);
+      return response.json();
+    });
     refreshPromise = source
       .then((data) => {
         const rows = Array.isArray(data?.history)
@@ -248,12 +246,9 @@
 
   const bootRefresh = () => {
     installRateOverlay();
-    const sharedBoot = window.__DTL_HIROSE_PRIMARY_BOOT_PROMISE__ || null;
-    refresh({
-      force:true,
-      reason:sharedBoot ? 'boot-shared-primary' : 'boot',
-      sourcePromise:sharedBoot
-    }).catch(() => {});
+    // This independent no-store read is intentionally not shared with historical
+    // bootstrap: it repairs a stale first response without blocking first paint.
+    refresh({ force:true, reason:'boot' }).catch(() => {});
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootRefresh, { once:true });
   else setTimeout(bootRefresh, 0);
