@@ -3,7 +3,7 @@
   "pair": "USD/TRY",
   "unit": 1000,
   "policy": "official-history-manual-promotion-rate-estimate-future",
-  "officialThrough": "2026-09-24",
+  "officialThrough": "2026-09-30",
   "history": [
     {
       "date": "2026-07-10",
@@ -334,6 +334,30 @@
       "marginPer1000Jpy": 6300,
       "verification": "hirose-official",
       "reference": "https://hirose-fx.jp/pdf/deposit/20260924/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-25",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260925/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-28",
+      "marginPer1000Jpy": 6400,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260928/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-29",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260929/lionfx.pdf"
+    },
+    {
+      "date": "2026-09-30",
+      "marginPer1000Jpy": 6300,
+      "verification": "hirose-official",
+      "reference": "https://hirose-fx.jp/pdf/deposit/20260930/lionfx.pdf"
     }
   ],
   "ruleEffectiveFrom": "2026-07-01",
