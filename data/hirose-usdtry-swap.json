@@ -3,7 +3,7 @@
   "seedSource": "https://raw.githubusercontent.com/ProtChan/USDTRY/main/data/usdtry.json",
   "historyStart": "2026-07-01",
   "pair": "USD/TRY",
-  "updatedAt": "2026-10-22T01:35:05.504275Z",
+  "updatedAt": "2026-10-23T01:35:35.753547Z",
   "history": [
     {
       "date": "2026-07-01",
@@ -571,6 +571,13 @@
       "unit": 1000,
       "sellJpy": 109.95,
       "buyJpy": -129.07
+    },
+    {
+      "date": "2026-10-22",
+      "days": 3,
+      "unit": 1000,
+      "sellJpy": 326.13,
+      "buyJpy": -382.85
     }
   ]
 }
